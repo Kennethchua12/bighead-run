@@ -13,23 +13,32 @@
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;overflow:hidden;background:#1a1026;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
-  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-  canvas{display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
+  #wrap{position:fixed;inset:0}
+  canvas{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
 
   /* 頂部資訊列 HUD */
-  #hud{position:fixed;top:0;left:0;right:0;display:flex;gap:14px;align-items:center;
-       padding:10px 14px;color:var(--paper);font-weight:bold;pointer-events:none;
-       text-shadow:0 2px 0 rgba(0,0,0,.35);z-index:5}
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+       padding:10px 14px calc(10px + env(safe-area-inset-top,0px));color:var(--paper);font-weight:bold;
+       pointer-events:none;text-shadow:0 2px 0 rgba(0,0,0,.35);z-index:5}
   .stat{display:flex;align-items:center;gap:6px;background:var(--panel);
         padding:6px 12px;border-radius:999px;font-size:15px;backdrop-filter:blur(4px)}
   .stat b{color:var(--coin)}
   #spacer{flex:1}
   .btn{pointer-events:auto;cursor:pointer;border:none;border-radius:999px;
        font-weight:bold;font-family:inherit;padding:8px 14px;font-size:14px;color:#fff;
-       background:var(--accent);box-shadow:0 3px 0 #b8345e;transition:transform .05s}
+       background:var(--accent);box-shadow:0 3px 0 #b8345e;transition:transform .05s;white-space:nowrap}
   .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #b8345e}
   .btn.alt{background:#5a4a78;box-shadow:0 3px 0 #3a2e52}
   .btn.alt:active{box-shadow:0 1px 0 #3a2e52}
+  /* 窄螢幕（手機）：精簡 HUD，按鈕只留圖示 */
+  @media (max-width:600px){
+    #hud{gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-top,0px));justify-content:flex-end}
+    #spacer{display:none}
+    .stat{padding:5px 9px;font-size:13px;gap:3px}
+    .btn{padding:8px 11px;font-size:15px;box-shadow:0 2px 0 #b8345e}
+    .btn.alt{box-shadow:0 2px 0 #3a2e52}
+    .btn .lbl{display:none}      /* 只顯示 emoji 圖示 */
+  }
 
   /* 覆蓋層 overlay：開始 / 通關 / 失敗 */
   #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -73,11 +82,11 @@
   <div class="stat">❤️ <span id="lives">3</span></div>
   <div class="stat">🏁 <span id="dist">0</span>m</div>
   <div id="spacer"></div>
-  <button class="btn" id="uploadBtn">📷 換人頭</button>
-  <button class="btn" id="faceBtn">😜 換表情</button>
-  <button class="btn alt" id="shotBtn">📸 截圖</button>
+  <button class="btn" id="uploadBtn">📷<span class="lbl"> 換人頭</span></button>
+  <button class="btn" id="faceBtn">😜<span class="lbl"> 換表情</span></button>
+  <button class="btn alt" id="shotBtn">📸<span class="lbl"> 截圖</span></button>
   <button class="btn alt" id="soundBtn">🔊</button>
-  <button class="btn alt" id="resetBtn">↻ 重來</button>
+  <button class="btn alt" id="resetBtn">↻<span class="lbl"> 重來</span></button>
 </div>
 
 <div id="overlay">
@@ -102,7 +111,7 @@
     <button class="tbtn" data-k="right">▶</button>
   </div>
   <div class="pad">
-    <button class="tbtn jump" data-k="jump">⤒</button>
+    <button class="tbtn jump" data-k="jump">▲</button>
   </div>
 </div>
 
@@ -115,19 +124,25 @@
   const ctx = canvas.getContext("2d");
   const overlay = document.getElementById("overlay");
 
-  // ---- 顯示縮放 ----
-  let VW = 900, VH = 506, scale = 1, offX = 0, offY = 0;
+  // ---- 顯示縮放（滿版自適應）----
+  // 固定世界「高度」VH，讓垂直構圖在各裝置一致；可見「寬度」VW 依螢幕比例計算，
+  // 畫布永遠填滿整個螢幕、不留黑邊、像素不變形（橫向看得寬、直向看得窄但完整）。
+  let VW = 900;
+  const VH = 520;
+  let scale = 1;
   function resize(){
     const w = window.innerWidth, h = window.innerHeight;
-    scale = Math.min(w / VW, h / VH);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = VW * scale * dpr;
-    canvas.height = VH * scale * dpr;
-    canvas.style.width = (VW * scale) + "px";
-    canvas.style.height = (VH * scale) + "px";
-    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    VW = Math.round(VH * w / h);          // 依比例決定可見寬度
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    scale = (h * dpr) / VH;               // 每世界單位的像素數（= w*dpr/VW，正方形像素）
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
   }
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", ()=>setTimeout(resize,120));
 
   // ---- 關卡定義（原創設計）----
   // 地面用磚塊段表示，浮空平台、金幣、怪物、終點旗
