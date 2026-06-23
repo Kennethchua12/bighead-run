@@ -47,8 +47,8 @@
        padding:5px 11px;border-radius:8px;min-width:34px}
   #overlay .big{font-size:18px;padding:14px 30px;border-radius:14px;box-shadow:0 5px 0 #b8345e}
   #overlay .big:active{box-shadow:0 2px 0 #b8345e}
-  .titleface{width:96px;height:96px;border-radius:50%;border:5px solid var(--paper);
-             box-shadow:0 6px 0 rgba(0,0,0,.25);object-fit:cover;background:#ffd93d}
+  .titleface{width:104px;height:104px;border-radius:22px;border:4px solid var(--paper);
+             box-shadow:0 6px 0 rgba(0,0,0,.25);object-fit:contain;background:rgba(255,255,255,.12)}
 
   /* 手機觸控鍵 */
   #touch{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;
@@ -290,8 +290,9 @@
     const c = document.createElement("canvas"); c.width=c.height=120;
     const x = c.getContext("2d");
     if(headImg){
-      const s = Math.min(headImg.width, headImg.height);
-      x.drawImage(headImg,(headImg.width-s)/2,(headImg.height-s)/2,s,s,0,0,120,120);
+      const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
+      const s=Math.min(120/iw,120/ih), dw=iw*s, dh=ih*s;
+      x.drawImage(headImg,(120-dw)/2,(120-dh)/2,dw,dh);
     } else {
       drawDefaultFace(x,60,60,52);
     }
@@ -648,14 +649,19 @@
     const hx=0, hy=p.h-40+bob, R=18;
     ctx.scale(p.face,1); // 還原成正向，避免上傳的臉左右顛倒
     if(headImg){
+      // 上傳的人頭：保留原始比例完整顯示（contain），不裁圓、不裁邊
+      const iw = headImg.naturalWidth  || headImg.width;
+      const ih = headImg.naturalHeight || headImg.height;
+      const MW = 50, MH = 60;                 // 人頭最大框（大頭效果）
+      const s  = Math.min(MW/iw, MH/ih);
+      const dw = iw*s, dh = ih*s;
+      const bottomY = p.h-18+bob;             // 臉底貼近領口
+      // 落地陰影，讓臉看起來有貼在身體上
       ctx.save();
-      ctx.beginPath(); ctx.arc(hx,hy,R,0,7); ctx.clip();
-      const s=Math.min(headImg.width,headImg.height);
-      ctx.drawImage(headImg,(headImg.width-s)/2,(headImg.height-s)/2,s,s, hx-R,hy-R,R*2,R*2);
+      ctx.globalAlpha=.18; ctx.fillStyle="#000";
+      ctx.beginPath(); ctx.ellipse(0, bottomY-2, dw*0.32, 4, 0, 0, 7); ctx.fill();
       ctx.restore();
-      // 圓框
-      ctx.strokeStyle="#fff4e6"; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.arc(hx,hy,R,0,7); ctx.stroke();
+      ctx.drawImage(headImg, -dw/2, bottomY-dh, dw, dh);
     } else {
       drawDefaultFace(ctx, hx, hy, R);
     }
