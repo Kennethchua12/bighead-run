@@ -74,6 +74,9 @@
   <div class="stat">🏁 <span id="dist">0</span>m</div>
   <div id="spacer"></div>
   <button class="btn" id="uploadBtn">📷 換人頭</button>
+  <button class="btn" id="faceBtn">😜 換表情</button>
+  <button class="btn alt" id="shotBtn">📸 截圖</button>
+  <button class="btn alt" id="soundBtn">🔊</button>
   <button class="btn alt" id="resetBtn">↻ 重來</button>
 </div>
 
@@ -192,6 +195,57 @@
   let state = "menu"; // menu | play | dead | win
   let coinCount = 0, lives = 3, camX = 0, t = 0;
   const keys = {left:false, right:false, jump:false, jumpHeld:false};
+  let faceIndex = 0;          // 內建表情索引（headImg 存在時優先用上傳圖）
+  let particles = [];         // 粒子特效
+  let muted = false;          // 音效開關
+
+  // ---- 音效系統（Web Audio 合成，全原創）----
+  let actx = null;
+  function audioCtx(){
+    if(!actx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) actx = new AC(); }
+    if(actx && actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function tone(freq, dur, type, vol, slideTo){
+    if(muted) return;
+    const ac = audioCtx(); if(!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || "square"; o.frequency.value = freq;
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+    g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  }
+  const sfx = {
+    jump:  ()=> tone(420, 0.16, "square", 0.16, 760),
+    coin:  ()=>{ tone(880,0.07,"square",0.15); setTimeout(()=>tone(1320,0.12,"square",0.15),60); },
+    stomp: ()=> tone(180, 0.18, "sawtooth", 0.2, 60),
+    hurt:  ()=>{ tone(300,0.18,"sawtooth",0.2,90); setTimeout(()=>tone(160,0.25,"sawtooth",0.18,50),120); },
+    win:   ()=>{ const n=[523,659,784,1047]; n.forEach((f,i)=>setTimeout(()=>tone(f,0.22,"triangle",0.18),i*140)); },
+    swap:  ()=> tone(660, 0.12, "triangle", 0.16, 990)
+  };
+
+  // 粒子特效
+  function burst(x,y,color,n){
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2, sp=1+Math.random()*3.5;
+      particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1.5,
+                      life:1,color,size:2+Math.random()*3});
+    }
+  }
+  function updateParticles(){
+    for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.18; p.vx*=0.96; p.life-=0.035; }
+    particles = particles.filter(p=>p.life>0);
+  }
+  function drawParticles(){
+    for(const p of particles){
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.color;
+      ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    }
+    ctx.globalAlpha=1;
+  }
 
   // ---- 人頭圖（可上傳替換）----
   let headImg = null;
@@ -205,6 +259,31 @@
     img.src = url;
   });
   document.getElementById("uploadBtn").onclick = pickFile;
+
+  // 換內建表情（會清掉上傳的人頭，改用內建搞笑臉）
+  document.getElementById("faceBtn").onclick = ()=>{
+    headImg = null;
+    faceIndex = (faceIndex + 1) % presetFaces.length;
+    sfx.swap(); drawTitleFace();
+  };
+
+  // 靜音切換
+  document.getElementById("soundBtn").onclick = (e)=>{
+    muted = !muted;
+    e.currentTarget.textContent = muted ? "🔇" : "🔊";
+    if(!muted) sfx.swap();
+  };
+
+  // 截圖存檔（把目前畫面存成 PNG，方便傳給朋友）
+  document.getElementById("shotBtn").onclick = ()=>{
+    try{
+      const a = document.createElement("a");
+      a.download = "大頭闖關.png";
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      sfx.coin();
+    }catch(err){ alert("截圖失敗：" + err.message); }
+  };
 
   // 把目前人頭畫到開始畫面的圓形預覽
   function drawTitleFace(){
@@ -253,7 +332,7 @@
     b.addEventListener("mousedown",on); b.addEventListener("mouseup",off);
     b.addEventListener("mouseleave",off);
   });
-  document.getElementById("startBtn").onclick = ()=>{ reset(true); };
+  document.getElementById("startBtn").onclick = ()=>{ audioCtx(); reset(true); };
 
   // ---- HUD ----
   function updateHUD(){
@@ -290,7 +369,7 @@
     if(Math.abs(p.vx)>0.3 && p.onGround) p.walk += Math.abs(p.vx)*0.06;
 
     // 跳躍
-    if(keys.jump && p.onGround){ p.vy=JUMP; p.onGround=false; }
+    if(keys.jump && p.onGround){ p.vy=JUMP; p.onGround=false; sfx.jump(); }
     if(!keys.jumpHeld && p.vy<-4) p.vy=-4; // 鬆手變矮跳
 
     // 重力
@@ -321,7 +400,7 @@
     for(const c of coins){
       if(c.got) continue;
       if(Math.abs((p.x+p.w/2)-c.x)<26 && Math.abs((p.y+p.h/2)-c.y)<30){
-        c.got=true; coinCount++; updateHUD();
+        c.got=true; coinCount++; updateHUD(); sfx.coin(); burst(c.x,c.y,"#ffd93d",10);
       }
     }
 
@@ -336,6 +415,7 @@
         if(p.vy>0 && (p.y+p.h)-e.y < 22){
           // 踩到頭頂 → 打倒
           e.alive=false; e.dead=20; p.vy=-9; coinCount+=1; updateHUD();
+          sfx.stomp(); burst(e.x,e.y,"#9b4fb5",14);
         } else {
           loseLife(); return;
         }
@@ -352,11 +432,12 @@
   }
 
   function loseLife(){
+    sfx.hurt();
     lives--; updateHUD();
     if(lives<=0){ state="dead"; showOverlay("dead"); }
     else { reset(false); }
   }
-  function win(){ state="win"; showOverlay("win"); }
+  function win(){ sfx.win(); state="win"; showOverlay("win"); }
 
   function showOverlay(kind){
     const h=overlay.querySelector("h1"), sub=overlay.querySelector(".sub"),
@@ -409,6 +490,7 @@
     coins.forEach(drawCoin);
     drawGoal();
     enemies.forEach(drawEnemy);
+    drawParticles();
     drawPlayer();
 
     ctx.restore();
@@ -580,22 +662,50 @@
     ctx.restore();
   }
 
-  // 預設可愛人頭（原創）
-  function drawDefaultFace(c, x, y, R){
-    c.fillStyle="#ffd93d";
-    c.beginPath(); c.arc(x,y,R,0,7); c.fill();
-    c.fillStyle="#e8b800"; // 頭髮
-    c.beginPath(); c.arc(x,y-2,R,Math.PI*1.05,Math.PI*1.95); c.fill();
-    // 眼
-    c.fillStyle="#241734";
-    c.beginPath(); c.arc(x-6,y-1,2.6,0,7); c.arc(x+6,y-1,2.6,0,7); c.fill();
-    // 腮紅
-    c.fillStyle="rgba(255,92,138,.5)";
-    c.beginPath(); c.arc(x-9,y+5,3,0,7); c.arc(x+9,y+5,3,0,7); c.fill();
-    // 笑嘴
-    c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath();
-    c.arc(x,y+3,6,0.15*Math.PI,0.85*Math.PI); c.stroke();
+  // 內建搞笑表情（全原創手繪），可一鍵切換
+  function faceBase(c,x,y,R,skin,hair){
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y,R,0,7); c.fill();
+    if(hair){ c.fillStyle=hair; c.beginPath(); c.arc(x,y-2,R,Math.PI*1.05,Math.PI*1.95); c.fill(); }
   }
+  const presetFaces = [
+    // 0 笑臉
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffd93d","#e8b800");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-1,2.6,0,7); c.arc(x+6,y-1,2.6,0,7); c.fill();
+      c.fillStyle="rgba(255,92,138,.5)"; c.beginPath(); c.arc(x-9,y+5,3,0,7); c.arc(x+9,y+5,3,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.arc(x,y+3,6,0.15*Math.PI,0.85*Math.PI); c.stroke(); },
+    // 1 偷笑（瞇眼大笑）
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffcf5a","#d99a2b");
+      c.strokeStyle="#241734"; c.lineWidth=2.4;
+      c.beginPath(); c.arc(x-6,y+1,4,1.1*Math.PI,1.9*Math.PI); c.arc(x+6,y+1,4,1.1*Math.PI,1.9*Math.PI); c.stroke();
+      c.fillStyle="rgba(255,92,138,.55)"; c.beginPath(); c.arc(x-10,y+6,3.5,0,7); c.arc(x+10,y+6,3.5,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x,y+7,6,0,Math.PI); c.fill();
+      c.fillStyle="#ff5c8a"; c.beginPath(); c.arc(x,y+9,4,0,Math.PI); c.fill(); },
+    // 2 墨鏡酷臉
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#f0b27a","#3a2e2e");
+      c.fillStyle="#241734"; c.fillRect(x-12,y-4,9,7); c.fillRect(x+3,y-4,9,7); c.fillRect(x-3,y-2,6,2);
+      c.fillStyle="rgba(255,255,255,.4)"; c.fillRect(x-11,y-3,3,2); c.fillRect(x+4,y-3,3,2);
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.moveTo(x-5,y+8); c.lineTo(x+5,y+8); c.stroke(); },
+    // 3 吐舌
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffd93d","#e8b800");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-2,2.6,0,7); c.arc(x+6,y-2,2.6,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.arc(x,y+2,5,0,Math.PI); c.stroke();
+      c.fillStyle="#ff5c8a"; c.beginPath(); c.moveTo(x-4,y+5); c.lineTo(x+4,y+5); c.lineTo(x+2,y+12); c.arc(x,y+11,3,0,Math.PI); c.fill(); },
+    // 4 震驚
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#fbe6a2","#c9a24b");
+      c.fillStyle="#fff"; c.beginPath(); c.arc(x-6,y-2,4,0,7); c.arc(x+6,y-2,4,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-2,2,0,7); c.arc(x+6,y-2,2,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.ellipse(x,y+7,3.5,5,0,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=1.6; c.beginPath(); c.moveTo(x-11,y-9); c.lineTo(x-3,y-8); c.moveTo(x+11,y-9); c.lineTo(x+3,y-8); c.stroke(); },
+    // 5 生氣
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ff9e7d","#8a2e1a");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y,2.4,0,7); c.arc(x+6,y,2.4,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2.4; c.beginPath();
+      c.moveTo(x-11,y-7); c.lineTo(x-2,y-3); c.moveTo(x+11,y-7); c.lineTo(x+2,y-3); c.stroke();
+      c.beginPath(); c.arc(x,y+9,5,1.1*Math.PI,1.9*Math.PI); c.stroke(); }
+  ];
+  function drawFace(c,x,y,R){ (presetFaces[faceIndex] || presetFaces[0])(c,x,y,R); }
+  // 相容舊呼叫名
+  function drawDefaultFace(c,x,y,R){ drawFace(c,x,y,R); }
 
   function roundRect(x,y,w,h,r){
     ctx.beginPath();
@@ -605,7 +715,7 @@
   }
 
   // ---- 主迴圈 ----
-  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+  function loop(){ update(); updateParticles(); draw(); requestAnimationFrame(loop); }
 
   // 初始化
   resize(); seedCoins(); seedEnemies(); drawTitleFace(); loop();
