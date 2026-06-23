@@ -86,6 +86,7 @@
   <button class="btn" id="faceBtn">😜<span class="lbl"> 換表情</span></button>
   <button class="btn alt" id="shotBtn">📸<span class="lbl"> 截圖</span></button>
   <button class="btn alt" id="soundBtn">🔊</button>
+  <button class="btn alt" id="musicBtn">🎵</button>
   <button class="btn alt" id="resetBtn">↻<span class="lbl"> 重來</span></button>
 </div>
 
@@ -213,6 +214,10 @@
   let faceIndex = 0;          // 內建表情索引（headImg 存在時優先用上傳圖）
   let particles = [];         // 粒子特效
   let muted = false;          // 音效開關
+  let musicOn = true;         // 背景音樂開關
+  let fx = null;              // 過場動畫狀態（死亡 / 過關）
+  let flyHead = null;         // 死亡時彈飛的頭
+  let lastReward = "";        // 本次過關獎勵
 
   // ---- 音效系統（Web Audio 合成，全原創）----
   let actx = null;
@@ -238,8 +243,63 @@
     stomp: ()=> tone(180, 0.18, "sawtooth", 0.2, 60),
     hurt:  ()=>{ tone(300,0.18,"sawtooth",0.2,90); setTimeout(()=>tone(160,0.25,"sawtooth",0.18,50),120); },
     win:   ()=>{ const n=[523,659,784,1047]; n.forEach((f,i)=>setTimeout(()=>tone(f,0.22,"triangle",0.18),i*140)); },
-    swap:  ()=> tone(660, 0.12, "triangle", 0.16, 990)
+    swap:  ()=> tone(660, 0.12, "triangle", 0.16, 990),
+    // ── 新增惡搞音效 ──
+    boing: ()=>{ tone(200,0.18,"sine",0.22,900); setTimeout(()=>tone(900,0.22,"sine",0.18,180),120); }, // 頭彈飛
+    sadTrombone: ()=>{ const n=[330,294,262,196]; n.forEach((f,i)=>setTimeout(()=>tone(f,0.34,"sawtooth",0.16,f*0.94),i*230)); }, // 悲傷小號
+    sticker: ()=> tone(1200,0.05,"square",0.2,300),      // 貼紙啪
+    fanfare: ()=>{ const n=[523,523,523,523,659,784,1047]; const d=[.12,.12,.12,.2,.2,.2,.4];
+                   let acc=0; n.forEach((f,i)=>{ setTimeout(()=>tone(f,d[i]+0.05,"square",0.18),acc*1000); acc+=d[i]; }); }, // 勝利號角
+    stamp: ()=>{ tone(120,0.12,"sawtooth",0.28,60); setTimeout(()=>tone(80,0.16,"sawtooth",0.2,40),60); }, // 印章砸下
+    firework: ()=>{ tone(1500,0.05,"square",0.12,400); setTimeout(()=>{ for(let i=0;i<5;i++) setTimeout(()=>tone(800+Math.random()*1200,0.06,"square",0.08),i*40); },80); } // 煙火
   };
+
+  // ---- 背景音樂（原創旋律，循環）----
+  // 一段歡樂的原創 8-bit 風主旋律 + 低音，純程式合成
+  const MUSIC = {
+    bpm: 138,
+    // 主旋律（每格一個八分音符，0 = 休止）；頻率 Hz
+    mel: [523,659,784,659, 587,784,698,587, 659,880,784,659, 784,659,523,0,
+          587,698,880,698, 659,880,784,659, 523,659,784,1047, 988,784,659,0],
+    // 低音（每兩格一個音）
+    bass:[131,0,196,0, 147,0,196,0, 165,0,196,0, 196,0,131,0,
+          147,0,196,0, 165,0,196,0, 131,0,196,0, 196,0,196,0]
+  };
+  let musicTimer = null, musicStep = 0;
+  function musicNote(freq, dur, type, vol){
+    if(!musicOn) return;
+    const ac = audioCtx(); if(!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.linearRampToValueAtTime(vol, ac.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  }
+  function startMusic(){
+    if(musicTimer || !musicOn) return;
+    audioCtx();
+    const stepMs = 60000 / MUSIC.bpm / 2;   // 八分音符
+    musicStep = 0;
+    musicTimer = setInterval(()=>{
+      const m = MUSIC.mel[musicStep % MUSIC.mel.length];
+      const b = MUSIC.bass[musicStep % MUSIC.bass.length];
+      if(m) musicNote(m, stepMs/1000*1.6, "square", 0.06);
+      if(b) musicNote(b, stepMs/1000*1.9, "triangle", 0.10);
+      musicStep++;
+    }, stepMs);
+  }
+  function stopMusic(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } }
+
+  // ---- 過關獎勵（隨機抽，惡搞反差風）----
+  const REWARDS = [
+    "📚 5 本練習冊","📝 期末考提前一週","🩴 媽媽的拖鞋 ×3","🍚 再來一碗白飯",
+    "🎫 補習券一張（不可退）","😬 班主任的微笑","💨 尊爵不凡空氣一袋","📶 隔壁老王的 WiFi 密碼",
+    "💬 已讀不回 ×99","☀️ 週一的早晨","⭐ 一張「再接再厲」貼紙","🔺 多力多滋（就一片）",
+    "🧦 只剩單隻的襪子","📉 你的數學成績","🥬 多吃點青菜","🎁 一個空盒子（驚不驚喜）"
+  ];
+  function pickReward(){ return REWARDS[Math.floor(Math.random()*REWARDS.length)]; }
 
   // 粒子特效
   function burst(x,y,color,n){
@@ -282,11 +342,18 @@
     sfx.swap(); drawTitleFace();
   };
 
-  // 靜音切換
+  // 音效切換
   document.getElementById("soundBtn").onclick = (e)=>{
     muted = !muted;
     e.currentTarget.textContent = muted ? "🔇" : "🔊";
     if(!muted) sfx.swap();
+  };
+
+  // 背景音樂切換
+  document.getElementById("musicBtn").onclick = (e)=>{
+    musicOn = !musicOn;
+    e.currentTarget.style.opacity = musicOn ? "1" : "0.45";
+    if(musicOn){ if(state==="play") startMusic(); } else { stopMusic(); }
   };
 
   // 截圖存檔（把目前畫面存成 PNG，方便傳給朋友）
@@ -320,10 +387,11 @@
   function reset(full){
     player.x=80; player.y=GROUND_Y-60; player.vx=0; player.vy=0;
     player.alive=true; player.win=false; player.face=1;
-    camX=0;
+    camX=0; flyHead=null; fx=null;
     if(full){ coinCount=0; lives=3; seedCoins(); seedEnemies(); }
     state="play"; overlay.classList.add("hidden");
     updateHUD();
+    startMusic();
   }
   document.getElementById("resetBtn").onclick = ()=>{ reset(true); };
 
@@ -371,6 +439,8 @@
 
   function update(){
     t++;
+    if(state==="dying"){ updateDeath(); return; }
+    if(state==="winning"){ updateWin(); return; }
     if(state!=="play") return;
     const p = player;
 
@@ -448,12 +518,67 @@
   }
 
   function loseLife(){
-    sfx.hurt();
-    lives--; updateHUD();
-    if(lives<=0){ state="dead"; showOverlay("dead"); }
-    else { reset(false); }
+    if(state==="dying") return;
+    sfx.hurt(); stopMusic();
+    // 惡搞死亡：頭「啵」一聲彈飛、旋轉升天
+    const p=player;
+    flyHead = {x:p.x+p.w/2, y:p.y+ (p.h-40), vx:(Math.random()*3-1.5), vy:-12, rot:0, vr:0.32, angel:0};
+    burst(p.x+p.w/2, p.y+10, "#ffffff", 18);
+    setTimeout(()=>sfx.boing(),40);
+    setTimeout(()=>sfx.sadTrombone(),260);
+    fx = {mode:"die", t:0, sticker:0};
+    state = "dying";
   }
-  function win(){ sfx.win(); state="win"; showOverlay("win"); }
+  function updateDeath(){
+    fx.t++;
+    if(flyHead){
+      flyHead.x += flyHead.vx; flyHead.y += flyHead.vy;
+      flyHead.vy += 0.5; flyHead.rot += flyHead.vr;
+      if(flyHead.y > VH-60){ flyHead.y = VH-60; flyHead.vy *= -0.4; flyHead.vx *= 0.6; }
+      if(fx.t>26) flyHead.angel = Math.min(1, (fx.t-26)/20); // 長出光環小翅膀
+    }
+    if(fx.t===60){ sfx.sticker(); fx.sticker=1; }  // 甩出「再接再厲」貼紙
+    if(fx.t>=110){
+      lives--; updateHUD();
+      flyHead=null; fx=null;
+      if(lives<=0){ state="dead"; showOverlay("dead"); }
+      else { reset(false); }  // reset 會重新開始音樂
+    }
+  }
+
+  function win(){
+    if(state==="winning") return;
+    stopMusic(); sfx.fanfare();
+    lastReward = pickReward();
+    fx = {mode:"win", t:0, stamp:0};
+    state = "winning";
+    // 彩虹紙花噴射
+    const colors=["#ff5c8a","#ffd93d","#3ddc97","#8aa4ff","#ff9e7d","#a06cd5"];
+    for(let i=0;i<70;i++){
+      const a=-Math.PI/2 + (Math.random()-0.5)*1.4, sp=4+Math.random()*7;
+      particles.push({x:player.x+player.w/2, y:player.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+                      life:1.4, color:colors[i%colors.length], size:3+Math.random()*4});
+    }
+  }
+  function updateWin(){
+    fx.t++;
+    // 角色慶祝原地小跳
+    const p=player;
+    if(p.onGround && fx.t%24===0){ p.vy=-7; sfx.coin(); }
+    p.vy += GRAV; p.y += p.vy;
+    if(p.y+p.h >= GROUND_Y){ p.y=GROUND_Y-p.h; p.vy=0; p.onGround=true; }
+    // 持續放煙火
+    if(fx.t%26===0){
+      sfx.firework();
+      const fx2=camX+VW*(0.25+Math.random()*0.5), fy2=VH*(0.2+Math.random()*0.25);
+      const colors=["#ff5c8a","#ffd93d","#3ddc97","#8aa4ff"];
+      for(let i=0;i<22;i++){ const a=Math.random()*Math.PI*2, sp=2+Math.random()*4;
+        particles.push({x:fx2,y:fy2,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,
+                        color:colors[i%colors.length],size:2+Math.random()*3}); }
+    }
+    if(fx.t===20){ sfx.stamp(); fx.stamp=1; } // 印章砸下
+    if(fx.t>=120){ fx=null; state="win"; showOverlay("win"); }
+  }
 
   function showOverlay(kind){
     const h=overlay.querySelector("h1"), sub=overlay.querySelector(".sub"),
@@ -463,8 +588,11 @@
     keysEl.style.display="none";
     if(kind==="win"){
       h.textContent="🏆 通關啦！";
-      sub.innerHTML=`你收集了 <b>${coinCount}</b> 顆金幣，順利衝到終點旗！<br>換個人頭再玩一次，截圖傳給朋友 😆`;
-      btn.textContent="再玩一次"; hint.textContent="按上方「換人頭」可隨時替換主角的臉";
+      sub.innerHTML=`<div style="font-size:1.05em;margin-bottom:10px">恭喜過關！金幣 <b>${coinCount}</b> 顆</div>`+
+        `<div style="background:rgba(255,255,255,.1);border:2px dashed var(--coin);border-radius:14px;`+
+        `padding:14px 18px;display:inline-block;margin:4px 0">🎖️ 神秘獎勵<br><b style="font-size:1.25em">${lastReward}</b></div>`+
+        `<div style="margin-top:10px;opacity:.85">換個人頭再玩一次，截圖傳給朋友 😆</div>`;
+      btn.textContent="再玩一次"; hint.textContent="每次過關獎勵都不一樣，試試手氣！";
     } else {
       h.textContent="💀 失敗了";
       sub.innerHTML=`金幣 <b>${coinCount}</b> 顆。別氣餒，再衝一次！`;
@@ -507,9 +635,94 @@
     drawGoal();
     enemies.forEach(drawEnemy);
     drawParticles();
-    drawPlayer();
+    if(state==="dying"){ drawCrumpledBody(); drawFlyHead(); }
+    else { drawPlayer(); }
 
     ctx.restore();
+
+    // 螢幕空間特效（不隨鏡頭移動）：印章 / 貼紙
+    if(state==="winning") drawWinStamp();
+    if(state==="dying")   drawDeathSticker();
+  }
+
+  // 死亡：身體垮掉（無頭）
+  function drawCrumpledBody(){
+    const p=player;
+    ctx.save();
+    ctx.translate(p.x+p.w/2, GROUND_Y);
+    ctx.fillStyle="rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(0,-2,20,5,0,0,7); ctx.fill();
+    // 攤平的身體
+    ctx.fillStyle="#3ddc97"; roundRect(-16,-16,32,16,7); ctx.fill();
+    ctx.fillStyle="#ffc59e"; ctx.fillRect(-22,-12,7,8); ctx.fillRect(15,-12,7,8); // 攤開的手
+    ctx.fillStyle="#2e2442"; ctx.fillRect(-12,-4,9,5); ctx.fillRect(3,-4,9,5);
+    ctx.restore();
+  }
+  // 死亡：彈飛旋轉的頭（帶上傳人頭 / 內建臉）+ 升天光環小翅膀
+  function drawFlyHead(){
+    if(!flyHead) return;
+    ctx.save();
+    ctx.translate(flyHead.x, flyHead.y);
+    // 光環
+    if(flyHead.angel>0){
+      ctx.globalAlpha=flyHead.angel;
+      ctx.strokeStyle="#ffe27a"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(0,-26,12,4,0,0,7); ctx.stroke();
+      // 小翅膀
+      ctx.fillStyle="rgba(255,255,255,.92)";
+      ctx.beginPath(); ctx.ellipse(-22,-2,8,12,0.5,0,7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(22,-2,8,12,-0.5,0,7); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    ctx.rotate(flyHead.rot);
+    const R=18;
+    if(headImg){
+      const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
+      const s=Math.min(46/iw,52/ih), dw=iw*s, dh=ih*s;
+      ctx.drawImage(headImg,-dw/2,-dh/2,dw,dh);
+    } else {
+      drawFace(ctx,0,0,R);
+    }
+    // 暈頭轉向的 X 眼（疊在內建臉上時才畫）
+    if(!headImg){
+      ctx.strokeStyle="#241734"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(-9,-3);ctx.lineTo(-3,3); ctx.moveTo(-3,-3);ctx.lineTo(-9,3);
+      ctx.moveTo(3,-3);ctx.lineTo(9,3); ctx.moveTo(9,-3);ctx.lineTo(3,3); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 死亡：甩出「再接再厲」貼紙（螢幕空間）
+  function drawDeathSticker(){
+    if(!fx || !fx.sticker) return;
+    const prog = Math.min(1,(fx.t-60)/12);
+    const sc = 1.25 - 0.25*prog;
+    ctx.save();
+    ctx.translate(VW*0.5, VH*0.42);
+    ctx.rotate(-0.18); ctx.scale(sc,sc);
+    ctx.fillStyle="#ff5c8a"; roundRect(-92,-30,184,60,14); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.lineWidth=3; ctx.strokeStyle="#fff";
+    roundRect(-92,-30,184,60,14); ctx.stroke();
+    ctx.fillStyle="#fff"; ctx.font="bold 30px 'Trebuchet MS',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("再接再厲！", 0, 2);
+    ctx.restore();
+    ctx.textAlign="start"; ctx.textBaseline="alphabetic";
+  }
+  // 過關：「通關!」印章砸下（螢幕空間）
+  function drawWinStamp(){
+    if(!fx || !fx.stamp) return;
+    const prog = Math.min(1,(fx.t-20)/14);
+    const sc = 2.2 - 1.2*prog + (prog>=1?Math.sin(fx.t*0.2)*0.02:0);
+    ctx.save();
+    ctx.translate(VW*0.5, VH*0.3);
+    ctx.rotate(-0.12); ctx.scale(sc,sc);
+    ctx.globalAlpha = Math.min(1,prog+0.3);
+    ctx.lineWidth=5; ctx.strokeStyle="#ff3b3b";
+    roundRect(-86,-34,172,68,12); ctx.stroke();
+    ctx.fillStyle="#ff3b3b"; ctx.font="bold 44px 'Trebuchet MS',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("通關!", 0, 2);
+    ctx.restore();
+    ctx.globalAlpha=1; ctx.textAlign="start"; ctx.textBaseline="alphabetic";
   }
 
   function drawHills(shift,baseY,color,sc){
