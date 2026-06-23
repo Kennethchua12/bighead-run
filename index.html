@@ -3,83 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>大頭登山賽 BigHead Climb</title>
+<title>大頭闖關 BigHead Run</title>
 <style>
   :root{
-    --sky1:#2b3a67; --sky2:#5b6fa8; --sky3:#f7b267; --grass:#5cc26b; --grass2:#3fa256;
-    --dirt:#7a4a2b; --dirt2:#5e3820; --coin:#ffd93d; --accent:#ff5c8a; --accent2:#3ddc97;
-    --ink:#16203a; --panel:rgba(16,22,40,.86); --paper:#f3f6ff;
+    --sky-top:#ffd6a5; --sky-mid:#ff9e7d; --sky-bot:#a06cd5;
+    --ground:#6b4226; --ground-top:#8fbf5f; --brick:#c97b4a;
+    --coin:#ffd93d; --ink:#241734; --panel:rgba(36,23,52,.82);
+    --accent:#ff5c8a; --accent2:#3ddc97; --paper:#fff4e6;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;overscroll-behavior:none;background:#0b1020;
-    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:var(--paper)}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;background:#1a1026;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
   #wrap{position:fixed;inset:0}
-  canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  canvas{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
 
+  /* 頂部資訊列 HUD */
   #hud{position:fixed;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
-    padding:10px 14px calc(10px+env(safe-area-inset-top,0px));font-weight:bold;pointer-events:none;
-    text-shadow:0 2px 0 rgba(0,0,0,.4);z-index:5}
-  .stat{display:flex;align-items:center;gap:6px;background:var(--panel);padding:6px 12px;
-    border-radius:999px;font-size:15px;backdrop-filter:blur(4px)}
+       padding:10px 14px calc(10px + env(safe-area-inset-top,0px));color:var(--paper);font-weight:bold;
+       pointer-events:none;text-shadow:0 2px 0 rgba(0,0,0,.35);z-index:5}
+  .stat{display:flex;align-items:center;gap:6px;background:var(--panel);
+        padding:6px 12px;border-radius:999px;font-size:15px;backdrop-filter:blur(4px)}
   .stat b{color:var(--coin)}
-  #fuelWrap{width:120px;height:14px;background:rgba(0,0,0,.45);border-radius:8px;overflow:hidden;position:relative}
-  #fuelBar{position:absolute;inset:0;width:100%;background:linear-gradient(90deg,#3ddc97,#7af0c0);transition:width .1s}
   #spacer{flex:1}
   .btn{pointer-events:auto;cursor:pointer;border:none;border-radius:999px;touch-action:manipulation;
-    font-weight:bold;font-family:inherit;padding:8px 13px;font-size:14px;color:#fff;white-space:nowrap;
-    background:var(--accent);box-shadow:0 3px 0 #b8345e;transition:transform .05s}
+       font-weight:bold;font-family:inherit;padding:8px 14px;font-size:14px;color:#fff;
+       background:var(--accent);box-shadow:0 3px 0 #b8345e;transition:transform .05s;white-space:nowrap}
   .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #b8345e}
-  .btn.alt{background:#3a4a78;box-shadow:0 3px 0 #243154}
-  .btn.alt:active{box-shadow:0 1px 0 #243154}
-  @media(max-width:640px){ #hud{gap:6px;padding:8px 10px} .stat{font-size:13px;padding:5px 9px}
-    #fuelWrap{width:84px} .btn .lbl{display:none} .btn{padding:8px 11px;font-size:15px} #spacer{display:none} }
+  .btn.alt{background:#5a4a78;box-shadow:0 3px 0 #3a2e52}
+  .btn.alt:active{box-shadow:0 1px 0 #3a2e52}
+  /* 窄螢幕（手機）：精簡 HUD，按鈕只留圖示 */
+  @media (max-width:600px){
+    #hud{gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-top,0px));justify-content:flex-end}
+    #spacer{display:none}
+    .stat{padding:5px 9px;font-size:13px;gap:3px}
+    .btn{padding:8px 11px;font-size:15px;box-shadow:0 2px 0 #b8345e}
+    .btn.alt{box-shadow:0 2px 0 #3a2e52}
+    .btn .lbl{display:none}      /* 只顯示 emoji 圖示 */
+  }
 
-  /* 踏板 */
-  #pedals{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;
-    padding:18px 22px calc(18px+env(safe-area-inset-bottom));pointer-events:none;z-index:6}
-  .pedal{pointer-events:auto;width:92px;height:92px;border-radius:24px;border:none;color:#fff;
-    font-size:15px;font-weight:bold;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-  .pedal .ic{font-size:30px;line-height:1}
-  #brakeP{background:rgba(58,74,120,.92);box-shadow:0 4px 0 #243154}
-  #gasP{background:rgba(61,220,151,.95);box-shadow:0 4px 0 #259e6c;color:#06281c}
-  .pedal:active{transform:translateY(3px)}
-  @media(pointer:coarse){#pedals{display:flex}}
+  /* 覆蓋層 overlay：開始 / 通關 / 失敗 */
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;gap:18px;text-align:center;color:var(--paper);
+           background:radial-gradient(circle at 50% 30%,rgba(160,108,213,.35),rgba(26,16,38,.92));
+           backdrop-filter:blur(6px);z-index:10;padding:24px}
+  #overlay.hidden{display:none}
+  #overlay h1{font-size:clamp(34px,9vw,72px);letter-spacing:1px;
+              background:linear-gradient(180deg,#fff4e6,var(--coin));
+              -webkit-background-clip:text;background-clip:text;color:transparent;
+              filter:drop-shadow(0 4px 0 rgba(0,0,0,.3));line-height:1}
+  #overlay .sub{font-size:clamp(13px,3.4vw,17px);opacity:.92;max-width:520px;line-height:1.6}
+  #overlay .keys{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;opacity:.9;font-size:13px}
+  .key{background:var(--panel);border:1px solid rgba(255,255,255,.15);
+       padding:5px 11px;border-radius:8px;min-width:34px}
+  #overlay .big{font-size:18px;padding:14px 30px;border-radius:14px;box-shadow:0 5px 0 #b8345e}
+  #overlay .big:active{box-shadow:0 2px 0 #b8345e}
+  .titleface{width:104px;height:104px;border-radius:22px;border:4px solid var(--paper);
+             box-shadow:0 6px 0 rgba(0,0,0,.25);object-fit:contain;background:rgba(255,255,255,.12)}
 
-  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:14px;text-align:center;padding:24px;z-index:10;
-    background:radial-gradient(circle at 50% 25%,rgba(91,111,168,.4),rgba(11,16,32,.94));backdrop-filter:blur(6px)}
-  .overlay.hidden{display:none}
-  .overlay h1{font-size:clamp(30px,8vw,60px);line-height:1;
-    background:linear-gradient(180deg,#fff,var(--coin));-webkit-background-clip:text;background-clip:text;color:transparent;
-    filter:drop-shadow(0 4px 0 rgba(0,0,0,.35))}
-  .overlay .sub{font-size:clamp(13px,3.3vw,16px);opacity:.92;max-width:520px;line-height:1.6}
-  .titleface{width:96px;height:96px;border-radius:20px;border:4px solid var(--paper);object-fit:contain;
-    background:rgba(255,255,255,.12);box-shadow:0 6px 0 rgba(0,0,0,.25)}
-  .big{font-size:18px;padding:14px 30px;border-radius:14px;box-shadow:0 5px 0 #b8345e}
-  .big:active{box-shadow:0 2px 0 #b8345e}
-  .tipcard{background:rgba(255,255,255,.08);border:1px dashed var(--coin);border-radius:12px;
-    padding:11px 15px;max-width:500px;line-height:1.55;font-size:14px;text-align:left}
+  /* 手機觸控鍵 */
+  #touch{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;
+         padding:16px 20px calc(16px + env(safe-area-inset-bottom));pointer-events:none;z-index:6}
+  #touch .pad{display:flex;gap:16px;pointer-events:auto}
+  .tbtn{width:74px;height:74px;border-radius:50%;border:none;font-size:28px;color:#fff;
+        background:var(--panel);box-shadow:0 4px 0 rgba(0,0,0,.4);
+        display:flex;align-items:center;justify-content:center;
+        user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+        touch-action:none;-webkit-tap-highlight-color:transparent}
+  .tbtn.jump{width:92px;height:92px;background:var(--accent);box-shadow:0 4px 0 #b8345e;font-size:32px}
+  .tbtn:active{transform:translateY(3px)}
+  @media (pointer:coarse){#touch{display:flex}}
 
-  /* 車庫 */
-  #garage .gwrap{background:var(--panel);border:1px solid rgba(255,255,255,.12);border-radius:18px;
-    padding:18px;max-width:520px;width:100%;max-height:82vh;overflow:auto}
-  .gtitle{font-size:22px;font-weight:bold;margin-bottom:2px}
-  .gcoins{color:var(--coin);font-size:16px;margin-bottom:12px}
-  .up{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.06);border-radius:12px;
-    padding:10px 12px;margin-bottom:8px}
-  .up .ico{font-size:26px;width:34px;text-align:center}
-  .up .info{flex:1;text-align:left}
-  .up .nm{font-weight:bold;font-size:15px}
-  .up .ds{font-size:12px;opacity:.75}
-  .pips{display:flex;gap:3px;margin-top:4px}
-  .pip{width:18px;height:7px;border-radius:3px;background:rgba(255,255,255,.18)}
-  .pip.on{background:var(--accent2)}
-  .upbtn{border:none;border-radius:10px;font-weight:bold;font-family:inherit;cursor:pointer;
-    padding:9px 12px;font-size:13px;color:#06281c;background:var(--coin);box-shadow:0 3px 0 #c9a400;white-space:nowrap}
-  .upbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #c9a400}
-  .upbtn.max{background:#445;color:#9aa;box-shadow:0 3px 0 #223;cursor:default}
-  .hint{font-size:12px;opacity:.7}
+  .hint{font-size:12px;opacity:.7;margin-top:-6px}
   input[type=file]{display:none}
 </style>
 </head>
@@ -88,48 +81,40 @@
 
 <div id="hud">
   <div class="stat">🪙 <b id="coins">0</b></div>
-  <div class="stat">⛽ <div id="fuelWrap"><div id="fuelBar"></div></div></div>
-  <div class="stat">📏 <span id="dist">0</span>m</div>
+  <div class="stat">❤️ <span id="lives">3</span></div>
+  <div class="stat">🏁 <span id="dist">0</span>m</div>
   <div id="spacer"></div>
-  <button class="btn" id="uploadBtn">📷<span class="lbl"> 換頭</span></button>
+  <button class="btn" id="uploadBtn">📷<span class="lbl"> 換人頭</span></button>
+  <button class="btn" id="faceBtn">😜<span class="lbl"> 換表情</span></button>
+  <button class="btn alt" id="shotBtn">📸<span class="lbl"> 截圖</span></button>
   <button class="btn alt" id="soundBtn">🔊</button>
-  <button class="btn alt" id="retryBtn">↻<span class="lbl"> 重來</span></button>
+  <button class="btn alt" id="musicBtn">🎵</button>
+  <button class="btn alt" id="resetBtn">↻<span class="lbl"> 重來</span></button>
 </div>
 
-<div id="pedals">
-  <button class="pedal" id="brakeP"><span class="ic">◀</span>煞車/倒</button>
-  <button class="pedal" id="gasP"><span class="ic">▶</span>油門</button>
-</div>
-
-<!-- 開始 -->
-<div class="overlay" id="startOv">
+<div id="overlay">
   <img id="titleFace" class="titleface" alt="">
-  <h1>大頭登山賽</h1>
-  <div class="sub">踩油門爬過山坡、收集 🪙 金幣、別翻車也別沒油！<br>抵達終點後進<b>車庫改裝</b>你的車。（按「換頭」把駕駛換成你朋友的臉 😎）</div>
-  <div class="tipcard" id="startTip"></div>
-  <div class="sub" style="opacity:.8">🖥 方向鍵 → 油門、← 煞車/倒車　📱 用下方踏板</div>
-  <button class="btn big" id="startBtn">發動引擎 ▶</button>
+  <h1>大頭闖關</h1>
+  <div class="sub">
+    踩怪、吃金幣、衝向終點旗 🚩<br>
+    最好玩的是 ——按「換人頭」上傳你朋友那張<b>爆笑偷笑臉</b>，主角立刻變成他！
+  </div>
+  <div class="keys">
+    <span class="key">← →</span><span>移動</span>
+    <span class="key">空白 / ↑</span><span>跳躍</span>
+    <span class="key">手機</span><span>下方按鈕</span>
+  </div>
+  <button class="btn big" id="startBtn">開始闖關</button>
+  <div class="hint">提示：踩在怪物頭上能打倒牠，正面撞到會扣血</div>
 </div>
 
-<!-- 撞車 / 沒油 -->
-<div class="overlay hidden" id="failOv">
-  <h1 id="failTitle">💥 翻車了</h1>
-  <div class="sub" id="failSub"></div>
-  <div class="tipcard" id="failTip"></div>
-  <button class="btn big" id="failBtn">再來一次</button>
-</div>
-
-<!-- 車庫 -->
-<div class="overlay hidden" id="garage">
-  <div class="gwrap">
-    <div class="gtitle">🏁 抵達終點！進車庫改裝</div>
-    <div class="gcoins">🪙 金幣：<b id="gCoins">0</b>（本趟 +<span id="gRun">0</span>）</div>
-    <div id="upList"></div>
-    <div class="tipcard" id="garageTip" style="margin:10px 0"></div>
-    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
-      <button class="btn big" id="raceAgain">🚗 再跑一次賺金幣</button>
-    </div>
-    <div class="hint" style="margin-top:8px">升級會永久保存，車子會越來越猛 💪</div>
+<div id="touch">
+  <div class="pad">
+    <button class="tbtn" data-k="left">◀</button>
+    <button class="tbtn" data-k="right">▶</button>
+  </div>
+  <div class="pad">
+    <button class="tbtn jump" data-k="jump">▲</button>
   </div>
 </div>
 
@@ -137,405 +122,864 @@
 
 <script>
 (() => {
-"use strict";
-const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
 
-// ---------- 顯示（滿版自適應）----------
-const VH=520; let VW=900, scale=1;
-function resize(){
-  const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,2);
-  VW=Math.round(VH*w/h);
-  canvas.style.width=w+"px"; canvas.style.height=h+"px";
-  canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
-  scale=(h*dpr)/VH; ctx.setTransform(scale,0,0,scale,0,0);
-}
-addEventListener("resize",resize);
-addEventListener("orientationchange",()=>setTimeout(resize,120));
-
-// ---------- 地形（第 1 關：平緩好開）----------
-const BASE=360, LEVEL_LEN=5600, FINISH=5400;
-function terrain(x){
-  if(x<360) return BASE;
-  const xx=x-360;
-  return BASE - Math.sin(xx*0.0042)*34 - Math.sin(xx*0.0090+1)*12 - Math.sin(xx*0.0021)*40;
-}
-function terrainSlope(x){ return Math.atan2(terrain(x+6)-terrain(x-6), 12); }
-
-// ---------- 升級資料（存 localStorage）----------
-const SAVE={coins:0, engine:0, grip:0, susp:0, fuel:0};
-try{ const s=JSON.parse(localStorage.getItem("bighead_climb")||"{}"); Object.assign(SAVE,s); }catch(e){}
-function persist(){ try{ localStorage.setItem("bighead_climb", JSON.stringify(SAVE)); }catch(e){} }
-const UPGRADES=[
-  {key:"engine",ico:"🔧",nm:"引擎馬力",ds:"加速更快、爬坡更猛",max:5,cost:l=>60+l*60},
-  {key:"grip",  ico:"🛞",nm:"輪胎抓地",ds:"更快、更不打滑",max:5,cost:l=>50+l*55},
-  {key:"susp",  ico:"🪛",nm:"懸吊避震",ds:"落地更穩、不易翻車",max:5,cost:l=>50+l*50},
-  {key:"fuel",  ico:"⛽",nm:"油箱容量",ds:"跑更遠、更安心",max:5,cost:l=>40+l*45},
-];
-// 由升級換算車輛參數
-function carStats(){
-  return {
-    ENG: 0.30 + SAVE.engine*0.045,
-    ROLL: 0.034 - SAVE.grip*0.003,      // 阻力越小越快
-    C: 0.50 + SAVE.susp*0.05,           // 阻尼越高越穩
-    FUEL: 100 + SAVE.fuel*32,
-  };
-}
-
-// ---------- 車輛物理（剛體 + 雙輪懸吊，已調校）----------
-const g=0.46, WB=56, AX=14, R=14, K=0.24, BRK=0.30;
-const car={x:120,y:BASE-26,vx:0,vy:0,a:0,av:0,wheelSpin:0,fuel:100};
-let stats=carStats();
-function rot(lx,ly,a){ return [lx*Math.cos(a)-ly*Math.sin(a), lx*Math.sin(a)+ly*Math.cos(a)]; }
-function resetCar(){
-  car.x=120; car.y=BASE-26; car.vx=0; car.vy=0; car.a=0; car.av=0; car.wheelSpin=0;
-  stats=carStats(); car.fuel=stats.FUEL;
-}
-function physics(gas,brake){
-  // 沒油 → 不能加油門
-  const hasFuel = car.fuel>0;
-  const G = gas && hasFuel;
-  let Fy=g, Fx=0, ground=false, rGY=0, fGY=0;
-  for(const [s,lx] of [["r",-WB/2],["f",WB/2]]){
-    const [rx,ry]=rot(lx,AX,car.a); const gy=terrain(car.x+rx);
-    if(s==="r")rGY=gy; else fGY=gy;
-    let pen=(car.y+ry+R)-gy;
-    if(pen>0){ ground=true; if(pen>14)pen=14; let N=K*pen + stats.C*car.vy; if(N<0)N=0; if(N>3.2)N=3.2; Fy-=N; }
+  // ---- 顯示縮放（滿版自適應）----
+  // 固定世界「高度」VH，讓垂直構圖在各裝置一致；可見「寬度」VW 依螢幕比例計算，
+  // 畫布永遠填滿整個螢幕、不留黑邊、像素不變形（橫向看得寬、直向看得窄但完整）。
+  let VW = 900;
+  const VH = 520;
+  let scale = 1;
+  function resize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    VW = Math.round(VH * w / h);          // 依比例決定可見寬度
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    scale = (h * dpr) / VH;               // 每世界單位的像素數（= w*dpr/VW，正方形像素）
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
   }
-  if(ground){
-    const [fx,fy]=rot(1,0,car.a);
-    if(G){ Fx+=fx*stats.ENG; Fy+=fy*stats.ENG; }
-    if(brake){ Fx-=fx*BRK; Fy-=fy*BRK; }
-    Fx+=-car.vx*stats.ROLL;
-  }
-  car.vx+=Fx; car.vy+=Fy; car.vx*=0.996; car.vy*=0.999;
-  car.x+=car.vx; car.y+=car.vy;
-  if(car.x<60){car.x=60;car.vx=0;}
-  if(ground){
-    const slope=Math.atan2(fGY-rGY,WB);
-    car.av += (slope-car.a)*0.13; car.av -= car.av*0.30;
-    if(G)car.av-=0.0030; if(brake)car.av+=0.0030;
-  } else {
-    if(G)car.av-=0.0011; if(brake)car.av+=0.0011; car.av*=0.985;
-  }
-  car.av=Math.max(-0.07,Math.min(0.07,car.av)); car.a+=car.av;
-  car.wheelSpin += car.vx*0.05;
-  // 油耗
-  if(G) car.fuel-=0.05; else car.fuel-=0.008;
-  if(car.fuel<0)car.fuel=0;
-  // 撞頭判定
-  const [hx,hy]=rot(0,-26,car.a);
-  const headDown=(car.y+hy)>terrain(car.x+hx)-2;
-  return {ground,headDown};
-}
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", ()=>setTimeout(resize,120));
 
-// ---------- 收集物 ----------
-let coins=[], cans=[], runCoins=0;
-function seedItems(){
-  coins=[]; cans=[];
-  for(let x=560;x<FINISH-120;x+=170){
-    coins.push({x, y:terrain(x)-46-Math.random()*30, got:false, t:Math.random()*6});
-  }
-  for(let x=1400;x<FINISH-200;x+=1500){
-    cans.push({x, y:terrain(x)-50, got:false});
-  }
-}
+  // ---- 關卡定義（原創設計）----
+  // 地面用磚塊段表示，浮空平台、金幣、怪物、終點旗
+  const T = 40; // 磚塊單位
+  const GROUND_Y = VH - 80;
+  const LEVEL_W = 5200;
 
-// ---------- 狀態 ----------
-let state="menu"; // menu | drive | crash | garage
-let camX=0, camY=0, t=0, dust=[];
-const keys={gas:false,brake:false};
+  // 地面缺口（坑洞）：[起點, 終點]
+  const gaps = [[1180,1320],[2460,2600],[3680,3820]];
+  function isGap(x){ return gaps.some(g => x > g[0] && x < g[1]); }
 
-// ---------- 音效 / 音樂（原創合成）----------
-let actx=null, muted=false;
-function AC(){ if(!actx){const A=window.AudioContext||window.webkitAudioContext; if(A)actx=new A();}
-  if(actx&&actx.state==="suspended")actx.resume(); return actx; }
-function tone(f,d,ty,v,slide){ if(muted)return; const ac=AC(); if(!ac)return;
-  const o=ac.createOscillator(),gn=ac.createGain(); o.type=ty||"square"; o.frequency.value=f;
-  if(slide)o.frequency.exponentialRampToValueAtTime(slide,ac.currentTime+d);
-  gn.gain.setValueAtTime(v||0.16,ac.currentTime); gn.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+d);
-  o.connect(gn);gn.connect(ac.destination); o.start();o.stop(ac.currentTime+d); }
-const sfx={
-  coin:()=>{tone(880,0.07,"square",0.13);setTimeout(()=>tone(1320,0.1,"square",0.13),55);},
-  can:()=>{tone(500,0.1,"triangle",0.16,760);setTimeout(()=>tone(820,0.12,"triangle",0.14),90);},
-  crash:()=>{tone(220,0.22,"sawtooth",0.2,60);setTimeout(()=>tone(120,0.28,"sawtooth",0.18,50),120);},
-  finish:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.22,"triangle",0.18),i*140));},
-  buy:()=>{tone(700,0.08,"square",0.16);setTimeout(()=>tone(1050,0.12,"square",0.16),70);},
-};
-// 引擎聲：持續振盪器，頻率隨車速/油門
-let engOsc=null, engGain=null;
-function engineOn(){ const ac=AC(); if(!ac||engOsc)return;
-  engOsc=ac.createOscillator(); engGain=ac.createGain();
-  engOsc.type="sawtooth"; engOsc.frequency.value=70; engGain.gain.value=0;
-  engOsc.connect(engGain); engGain.connect(ac.destination); engOsc.start(); }
-function engineUpdate(){ if(!engOsc)return;
-  const spd=Math.abs(car.vx);
-  const f=60 + spd*16 + (keys.gas?40:0);
-  engOsc.frequency.setTargetAtTime(Math.min(f,420), actx.currentTime, 0.05);
-  const vol = muted?0 : (state==="drive"? (0.02+ (keys.gas?0.05:0.015)+spd*0.004):0);
-  engGain.gain.setTargetAtTime(Math.min(vol,0.12), actx.currentTime, 0.08);
-}
-function engineOff(){ if(engGain&&actx) engGain.gain.setTargetAtTime(0,actx.currentTime,0.1); }
+  // 浮空平台 platforms：{x,y,w}
+  const platforms = [
+    {x:520,y:GROUND_Y-130,w:120},
+    {x:740,y:GROUND_Y-220,w:120},
+    {x:1120,y:GROUND_Y-150,w:180}, // 跨第一個坑
+    {x:1560,y:GROUND_Y-120,w:120},
+    {x:1780,y:GROUND_Y-210,w:120},
+    {x:2000,y:GROUND_Y-300,w:120},
+    {x:2400,y:GROUND_Y-150,w:200}, // 跨第二個坑
+    {x:2900,y:GROUND_Y-130,w:120},
+    {x:3120,y:GROUND_Y-230,w:120},
+    {x:3340,y:GROUND_Y-330,w:120},
+    {x:3620,y:GROUND_Y-160,w:200}, // 跨第三個坑
+    {x:4100,y:GROUND_Y-140,w:120},
+    {x:4320,y:GROUND_Y-240,w:120},
+    {x:4600,y:GROUND_Y-330,w:160},
+  ];
 
-// ---------- AI 知識卡 ----------
-const TIPS=[
- "AI 把每個字拆成「詞元 Token」再換成數字來理解——你打的字，對牠來說是一串數字。",
- "ChatGPT、Claude、Gemini、DeepSeek 都在做同一件事：猜下一個字，是世界最強的「接龍高手」。",
- "AI 有時一本正經亂講，叫「幻覺」——牠太想回答就編了個聽起來合理的答案，重要的事要查證。",
- "AI 的大腦有幾千億個「參數」，像幾千億顆旋鈕，訓練就是慢慢轉到對位置——跟你改裝車一樣，調到最強。",
- "讓 AI 答得好的祕訣：給清楚指令＋例子＋叫牠「一步步想」，這叫「提示工程」。",
- "Claude 是 Anthropic、ChatGPT 是 OpenAI、Gemini 是 Google、DeepSeek 來自中國——不同公司的選手。",
- "AlphaGo 用 AI 打敗世界圍棋冠軍，跟你鑽研最佳出裝、找最優解，是同一種「學習」。",
- "AI 也有記憶上限叫「上下文視窗」，聊太長會忘了前面——像油箱有容量，跑太遠要加油。",
- "訓練大模型要上萬張 GPU 算好幾週，電費貴到嚇人——所以叫「大」模型。",
- "AI 會很有自信地說錯話，聰明用法：當牠超強助手，但關鍵答案自己再確認一次。",
-];
-let tipIdx=Math.floor(Math.random()*TIPS.length);
-function nextTip(){ tipIdx=(tipIdx+1+Math.floor(Math.random()*(TIPS.length-1)))%TIPS.length; return TIPS[tipIdx]; }
-function curTip(){ return TIPS[tipIdx]; }
-
-// ---------- 人頭（可上傳）----------
-let headImg=null, faceIdx=0;
-const fileInput=document.getElementById("fileInput");
-fileInput.addEventListener("change",e=>{ const f=e.target.files[0]; if(!f)return;
-  const u=URL.createObjectURL(f),im=new Image();
-  im.onload=()=>{headImg=im; drawTitleFace(); URL.revokeObjectURL(u);}; im.src=u; });
-document.getElementById("uploadBtn").onclick=()=>fileInput.click();
-function drawDriverHead(c,x,y,R){
-  if(headImg){
-    const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
-    const s=Math.min((R*2.4)/iw,(R*2.8)/ih), dw=iw*s, dh=ih*s;
-    c.drawImage(headImg, x-dw/2, y-dh*0.62, dw, dh);
-  } else {
-    c.fillStyle="#ffd93d"; c.beginPath(); c.arc(x,y,R,0,7); c.fill();
-    c.fillStyle="#e8b800"; c.beginPath(); c.arc(x,y-2,R,Math.PI*1.05,Math.PI*1.95); c.fill();
-    c.fillStyle="#241734"; c.beginPath(); c.arc(x-5,y-1,2.4,0,7); c.arc(x+5,y-1,2.4,0,7); c.fill();
-    c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.arc(x,y+2,5,0.15*Math.PI,0.85*Math.PI); c.stroke();
-  }
-}
-function drawTitleFace(){
-  const c=document.createElement("canvas"); c.width=c.height=120; const x=c.getContext("2d");
-  if(headImg){ const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
-    const s=Math.min(120/iw,120/ih),dw=iw*s,dh=ih*s; x.drawImage(headImg,(120-dw)/2,(120-dh)/2,dw,dh);
-  } else { drawDriverHead(x,60,66,40); }
-  document.getElementById("titleFace").src=c.toDataURL();
-}
-
-// ---------- HUD ----------
-function updateHUD(){
-  document.getElementById("coins").textContent=SAVE.coins;
-  document.getElementById("dist").textContent=Math.max(0,Math.round(car.x/40));
-  document.getElementById("fuelBar").style.width=Math.max(0,(car.fuel/stats.FUEL*100))+"%";
-}
-
-// ---------- 流程 ----------
-function startRun(){
-  AC(); engineOn();
-  resetCar(); seedItems(); runCoins=0; camX=0; camY=car.y-VH*0.5;
-  state="drive"; t=0;
-  document.getElementById("startOv").classList.add("hidden");
-  document.getElementById("failOv").classList.add("hidden");
-  document.getElementById("garage").classList.add("hidden");
-  updateHUD();
-}
-function fail(reason){
-  if(state!=="drive")return;
-  state="crash"; engineOff(); sfx.crash();
-  // 灰塵
-  for(let i=0;i<20;i++){ const a=Math.random()*Math.PI*2,sp=1+Math.random()*4;
-    dust.push({x:car.x,y:car.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,life:1,c:"#cdbba0",sz:2+Math.random()*3}); }
-  setTimeout(()=>{
-    nextTip();
-    document.getElementById("failTitle").textContent = reason==="fuel"?"⛽ 沒油了":"💥 翻車了";
-    document.getElementById("failSub").innerHTML = reason==="fuel"
-      ? `跑了 <b>${Math.round(car.x/40)}</b> m，這趟撿了 <b>${runCoins}</b> 金幣。油箱可以在車庫升級！`
-      : `跑了 <b>${Math.round(car.x/40)}</b> m，這趟撿了 <b>${runCoins}</b> 金幣。油門別一直催到底，下坡放一下更穩。`;
-    document.getElementById("failTip").innerHTML="💡 "+curTip();
-    SAVE.coins+=runCoins; persist();
-    document.getElementById("failOv").classList.remove("hidden");
-  },900);
-}
-function finishLevel(){
-  if(state!=="drive")return;
-  state="garage"; engineOff(); sfx.finish();
-  SAVE.coins+=runCoins+200; persist();   // 過關獎勵 200
-  nextTip();
-  document.getElementById("gRun").textContent=runCoins+200;
-  document.getElementById("garageTip").innerHTML="💡 <b>AI 小知識：</b>"+curTip();
-  renderGarage();
-  document.getElementById("garage").classList.remove("hidden");
-}
-function renderGarage(){
-  document.getElementById("gCoins").textContent=SAVE.coins;
-  const list=document.getElementById("upList"); list.innerHTML="";
-  for(const u of UPGRADES){
-    const lv=SAVE[u.key], maxed=lv>=u.max, cost=u.cost(lv);
-    const row=document.createElement("div"); row.className="up";
-    let pips=""; for(let i=0;i<u.max;i++) pips+=`<span class="pip ${i<lv?'on':''}"></span>`;
-    row.innerHTML=`<div class="ico">${u.ico}</div><div class="info"><div class="nm">${u.nm}</div>`+
-      `<div class="ds">${u.ds}</div><div class="pips">${pips}</div></div>`+
-      (maxed?`<button class="upbtn max">已滿級</button>`
-            :`<button class="upbtn" data-k="${u.key}">升級 🪙${cost}</button>`);
-    list.appendChild(row);
-  }
-  list.querySelectorAll(".upbtn:not(.max)").forEach(b=>{
-    b.onclick=()=>{ const k=b.dataset.k, u=UPGRADES.find(x=>x.key===k), cost=u.cost(SAVE[k]);
-      if(SAVE.coins>=cost && SAVE[k]<u.max){ SAVE.coins-=cost; SAVE[k]++; persist(); sfx.buy(); renderGarage(); }
-      else { b.animate([{transform:"translateX(-4px)"},{transform:"translateX(4px)"},{transform:"translateX(0)"}],{duration:180}); }
-    };
-  });
-}
-document.getElementById("startBtn").onclick=startRun;
-document.getElementById("failBtn").onclick=startRun;
-document.getElementById("retryBtn").onclick=()=>{ if(state==="drive"){ engineOff(); state="menu"; } startRun(); };
-document.getElementById("raceAgain").onclick=startRun;
-document.getElementById("soundBtn").onclick=e=>{ muted=!muted; e.currentTarget.textContent=muted?"🔇":"🔊"; };
-
-// ---------- 輸入 ----------
-const keyDown=e=>{ if(e.code==="ArrowRight"||e.code==="KeyD"){keys.gas=true;e.preventDefault();}
-  if(e.code==="ArrowLeft"||e.code==="KeyA"){keys.brake=true;e.preventDefault();} };
-const keyUp=e=>{ if(e.code==="ArrowRight"||e.code==="KeyD")keys.gas=false;
-  if(e.code==="ArrowLeft"||e.code==="KeyA")keys.brake=false; };
-addEventListener("keydown",keyDown); addEventListener("keyup",keyUp);
-function bindPedal(id,which){ const el=document.getElementById(id);
-  const on=e=>{e.preventDefault();keys[which]=true;}, off=e=>{e.preventDefault();keys[which]=false;};
-  el.addEventListener("touchstart",on,{passive:false}); el.addEventListener("touchend",off,{passive:false});
-  el.addEventListener("touchcancel",off,{passive:false});
-  el.addEventListener("mousedown",on); el.addEventListener("mouseup",off); el.addEventListener("mouseleave",off);
-}
-bindPedal("gasP","gas"); bindPedal("brakeP","brake");
-
-// ---------- 更新 ----------
-function update(){
-  t++;
-  if(state==="drive"){
-    const r=physics(keys.gas,keys.brake);
-    // 撞頭 / 翻車
-    const flipped=Math.abs(((car.a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI)>2.05;
-    if(r.headDown || (flipped && r.ground)) { fail("crash"); }
-    else if(car.fuel<=0 && Math.abs(car.vx)<0.25 && car.x<FINISH){ fail("fuel"); }
-    else if(car.x>=FINISH){ finishLevel(); }
-    // 收集
-    for(const c of coins){ if(c.got)continue;
-      if(Math.abs(car.x-c.x)<26 && Math.abs(car.y-c.y)<34){ c.got=true; runCoins++; sfx.coin();
-        for(let i=0;i<6;i++){const a=Math.random()*6.28;dust.push({x:c.x,y:c.y,vx:Math.cos(a)*2,vy:Math.sin(a)*2-1,life:1,c:"#ffd93d",sz:2+Math.random()*2});}
-        updateHUD(); } }
-    for(const c of cans){ if(c.got)continue;
-      if(Math.abs(car.x-c.x)<30 && Math.abs(car.y-c.y)<38){ c.got=true; car.fuel=Math.min(stats.FUEL,car.fuel+45); sfx.can(); updateHUD(); } }
-    // 輪胎揚塵
-    if(keys.gas && Math.abs(car.vx)>1 && t%3===0){
-      const [rx,ry]=rot(-WB/2,AX+R,car.a);
-      dust.push({x:car.x+rx,y:car.y+ry,vx:-car.vx*0.3-Math.random(),vy:-Math.random()*1.5,life:1,c:"#caa,",sz:2+Math.random()*2,c:"#d8c4a0"});
+  // 金幣
+  let coins = [];
+  function seedCoins(){
+    coins = [];
+    const add=(x,y)=>coins.push({x,y,got:false,t:Math.random()*6});
+    // 平台上方的金幣串
+    platforms.forEach(p=>{ for(let i=0;i<3;i++) add(p.x+30+i*40, p.y-46); });
+    // 地面途中的金幣串
+    for(let x=300;x<LEVEL_W-300;x+=260){
+      if(isGap(x)) continue;
+      add(x, GROUND_Y-50); add(x+40, GROUND_Y-90); add(x+80, GROUND_Y-50);
     }
+  }
+
+  // 怪物 enemies：地面巡邏的小團子
+  let enemies = [];
+  function seedEnemies(){
+    enemies = [
+      {x:640,min:560,max:840,vx:1.1},
+      {x:1640,min:1500,max:1900,vx:1.3},
+      {x:2200,min:2120,max:2360,vx:1.0},
+      {x:2950,min:2880,max:3120,vx:1.4},
+      {x:4200,min:4060,max:4380,vx:1.2},
+    ].map(e=>({...e,y:GROUND_Y-34,w:36,h:34,alive:true,dead:0,wob:Math.random()*6}));
+  }
+
+  const goal = {x:5000, y:GROUND_Y};
+
+  // ---- 玩家 ----
+  const player = {
+    x:80, y:GROUND_Y-60, w:34, h:54, vx:0, vy:0,
+    onGround:false, face:1, alive:true, win:false, blink:0, walk:0
+  };
+
+  // ---- 狀態 ----
+  let state = "menu"; // menu | play | dead | win
+  let coinCount = 0, lives = 3, camX = 0, t = 0;
+  const keys = {left:false, right:false, jump:false, jumpHeld:false};
+  let faceIndex = 0;          // 內建表情索引（headImg 存在時優先用上傳圖）
+  let particles = [];         // 粒子特效
+  let muted = false;          // 音效開關
+  let musicOn = true;         // 背景音樂開關
+  let fx = null;              // 過場動畫狀態（死亡 / 過關）
+  let flyHead = null;         // 死亡時彈飛的頭
+  let lastReward = "";        // 本次過關獎勵
+
+  // ---- 音效系統（Web Audio 合成，全原創）----
+  let actx = null;
+  function audioCtx(){
+    if(!actx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) actx = new AC(); }
+    if(actx && actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function tone(freq, dur, type, vol, slideTo){
+    if(muted) return;
+    const ac = audioCtx(); if(!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || "square"; o.frequency.value = freq;
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+    g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  }
+  const sfx = {
+    jump:  ()=> tone(420, 0.16, "square", 0.16, 760),
+    coin:  ()=>{ tone(880,0.07,"square",0.15); setTimeout(()=>tone(1320,0.12,"square",0.15),60); },
+    stomp: ()=> tone(180, 0.18, "sawtooth", 0.2, 60),
+    hurt:  ()=>{ tone(300,0.18,"sawtooth",0.2,90); setTimeout(()=>tone(160,0.25,"sawtooth",0.18,50),120); },
+    win:   ()=>{ const n=[523,659,784,1047]; n.forEach((f,i)=>setTimeout(()=>tone(f,0.22,"triangle",0.18),i*140)); },
+    swap:  ()=> tone(660, 0.12, "triangle", 0.16, 990),
+    // ── 新增惡搞音效 ──
+    boing: ()=>{ tone(200,0.18,"sine",0.22,900); setTimeout(()=>tone(900,0.22,"sine",0.18,180),120); }, // 頭彈飛
+    sadTrombone: ()=>{ const n=[330,294,262,196]; n.forEach((f,i)=>setTimeout(()=>tone(f,0.34,"sawtooth",0.16,f*0.94),i*230)); }, // 悲傷小號
+    sticker: ()=> tone(1200,0.05,"square",0.2,300),      // 貼紙啪
+    fanfare: ()=>{ const n=[523,523,523,523,659,784,1047]; const d=[.12,.12,.12,.2,.2,.2,.4];
+                   let acc=0; n.forEach((f,i)=>{ setTimeout(()=>tone(f,d[i]+0.05,"square",0.18),acc*1000); acc+=d[i]; }); }, // 勝利號角
+    stamp: ()=>{ tone(120,0.12,"sawtooth",0.28,60); setTimeout(()=>tone(80,0.16,"sawtooth",0.2,40),60); }, // 印章砸下
+    firework: ()=>{ tone(1500,0.05,"square",0.12,400); setTimeout(()=>{ for(let i=0;i<5;i++) setTimeout(()=>tone(800+Math.random()*1200,0.06,"square",0.08),i*40); },80); } // 煙火
+  };
+
+  // ---- 背景音樂（原創旋律，循環）----
+  // 一段歡樂的原創 8-bit 風主旋律 + 低音，純程式合成
+  const MUSIC = {
+    bpm: 138,
+    // 主旋律（每格一個八分音符，0 = 休止）；頻率 Hz
+    mel: [523,659,784,659, 587,784,698,587, 659,880,784,659, 784,659,523,0,
+          587,698,880,698, 659,880,784,659, 523,659,784,1047, 988,784,659,0],
+    // 低音（每兩格一個音）
+    bass:[131,0,196,0, 147,0,196,0, 165,0,196,0, 196,0,131,0,
+          147,0,196,0, 165,0,196,0, 131,0,196,0, 196,0,196,0]
+  };
+  let musicTimer = null, musicStep = 0;
+  function musicNote(freq, dur, type, vol){
+    if(!musicOn) return;
+    const ac = audioCtx(); if(!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.linearRampToValueAtTime(vol, ac.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  }
+  function startMusic(){
+    if(musicTimer || !musicOn) return;
+    audioCtx();
+    const stepMs = 60000 / MUSIC.bpm / 2;   // 八分音符
+    musicStep = 0;
+    musicTimer = setInterval(()=>{
+      const m = MUSIC.mel[musicStep % MUSIC.mel.length];
+      const b = MUSIC.bass[musicStep % MUSIC.bass.length];
+      if(m) musicNote(m, stepMs/1000*1.6, "square", 0.06);
+      if(b) musicNote(b, stepMs/1000*1.9, "triangle", 0.10);
+      musicStep++;
+    }, stepMs);
+  }
+  function stopMusic(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } }
+
+  // ---- 過關獎勵（隨機抽，惡搞反差風）----
+  const REWARDS = [
+    "📚 5 本練習冊","📝 期末考提前一週","🩴 媽媽的拖鞋 ×3","🍚 再來一碗白飯",
+    "🎫 補習券一張（不可退）","😬 班主任的微笑","💨 尊爵不凡空氣一袋","📶 隔壁老王的 WiFi 密碼",
+    "💬 已讀不回 ×99","☀️ 週一的早晨","⭐ 一張「再接再厲」貼紙","🔺 多力多滋（就一片）",
+    "🧦 只剩單隻的襪子","📉 你的數學成績","🥬 多吃點青菜","🎁 一個空盒子（驚不驚喜）"
+  ];
+  function pickReward(){ return REWARDS[Math.floor(Math.random()*REWARDS.length)]; }
+
+  // 粒子特效
+  function burst(x,y,color,n){
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2, sp=1+Math.random()*3.5;
+      particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1.5,
+                      life:1,color,size:2+Math.random()*3});
+    }
+  }
+  function updateParticles(){
+    for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.18; p.vx*=0.96; p.life-=0.035; }
+    particles = particles.filter(p=>p.life>0);
+  }
+  function drawParticles(){
+    for(const p of particles){
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.color;
+      ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // ---- 人頭圖（可上傳替換）----
+  let headImg = null;
+  const fileInput = document.getElementById("fileInput");
+  function pickFile(){ fileInput.click(); }
+  fileInput.addEventListener("change", e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = ()=>{ headImg = img; drawTitleFace(); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+  document.getElementById("uploadBtn").onclick = pickFile;
+
+  // 換內建表情（會清掉上傳的人頭，改用內建搞笑臉）
+  document.getElementById("faceBtn").onclick = ()=>{
+    headImg = null;
+    faceIndex = (faceIndex + 1) % presetFaces.length;
+    sfx.swap(); drawTitleFace();
+  };
+
+  // 音效切換
+  document.getElementById("soundBtn").onclick = (e)=>{
+    muted = !muted;
+    e.currentTarget.textContent = muted ? "🔇" : "🔊";
+    if(!muted) sfx.swap();
+  };
+
+  // 背景音樂切換
+  document.getElementById("musicBtn").onclick = (e)=>{
+    musicOn = !musicOn;
+    e.currentTarget.style.opacity = musicOn ? "1" : "0.45";
+    if(musicOn){ if(state==="play") startMusic(); } else { stopMusic(); }
+  };
+
+  // 截圖存檔（把目前畫面存成 PNG，方便傳給朋友）
+  document.getElementById("shotBtn").onclick = ()=>{
+    try{
+      const a = document.createElement("a");
+      a.download = "大頭闖關.png";
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      sfx.coin();
+    }catch(err){ alert("截圖失敗：" + err.message); }
+  };
+
+  // 把目前人頭畫到開始畫面的圓形預覽
+  function drawTitleFace(){
+    const c = document.createElement("canvas"); c.width=c.height=120;
+    const x = c.getContext("2d");
+    if(headImg){
+      const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
+      const s=Math.min(120/iw,120/ih), dw=iw*s, dh=ih*s;
+      x.drawImage(headImg,(120-dw)/2,(120-dh)/2,dw,dh);
+    } else {
+      drawDefaultFace(x,60,60,52);
+    }
+    document.getElementById("titleFace").src = c.toDataURL();
+  }
+
+  // ---- 物理常數 ----
+  // 調靈敏：加速更快、轉向更利、第一步立刻動；JUMP 緩衝 + 土狼時間
+  const GRAV=0.62, ACCEL=1.5, MAXVX=5.2, FRIC=0.74, TURN=2.4, JUMP=-13.2;
+  const JUMP_BUFFER=8, COYOTE=7;   // 跳躍輸入緩衝 / 離地後仍可跳的幀數
+  let jumpBuffer=0, coyote=0;
+
+  function reset(full){
+    player.x=80; player.y=GROUND_Y-60; player.vx=0; player.vy=0;
+    player.alive=true; player.win=false; player.face=1;
+    camX=0; flyHead=null; fx=null;
+    if(full){ coinCount=0; lives=3; seedCoins(); seedEnemies(); }
+    state="play"; overlay.classList.add("hidden");
+    updateHUD();
+    startMusic();
+  }
+  document.getElementById("resetBtn").onclick = ()=>{ reset(true); };
+
+  // ---- 輸入 ----
+  const keyMap = {ArrowLeft:"left",KeyA:"left",ArrowRight:"right",KeyD:"right",
+                  ArrowUp:"jump",KeyW:"jump",Space:"jump"};
+  addEventListener("keydown",e=>{
+    const k=keyMap[e.code]; if(!k) return; e.preventDefault();
+    keys[k]=true;
+    if(k==="jump"){ if(!keys.jumpHeld) jumpBuffer=JUMP_BUFFER; keys.jumpHeld=true; }
+  });
+  addEventListener("keyup",e=>{
+    const k=keyMap[e.code]; if(!k) return;
+    keys[k]=false; if(k==="jump") keys.jumpHeld=false;
+  });
+  document.querySelectorAll("#touch .tbtn").forEach(b=>{
+    const k=b.dataset.k;
+    const on=e=>{e.preventDefault();keys[k]=true;if(k==="jump"){ if(!keys.jumpHeld) jumpBuffer=JUMP_BUFFER; keys.jumpHeld=true; }};
+    const off=e=>{e.preventDefault();keys[k]=false;if(k==="jump")keys.jumpHeld=false;};
+    b.addEventListener("touchstart",on,{passive:false});
+    b.addEventListener("touchend",off,{passive:false});
+    b.addEventListener("touchcancel",off,{passive:false});
+    b.addEventListener("mousedown",on); b.addEventListener("mouseup",off);
+    b.addEventListener("mouseleave",off);
+  });
+  document.getElementById("startBtn").onclick = ()=>{ audioCtx(); reset(true); };
+
+  // ---- HUD ----
+  function updateHUD(){
+    document.getElementById("coins").textContent = coinCount;
+    document.getElementById("lives").textContent = "❤️".repeat(Math.max(0,lives)) || "—";
+    document.getElementById("dist").textContent = Math.max(0,Math.round(player.x/40));
+  }
+
+  // ---- 碰撞輔助：玩家踩地面或平台 ----
+  function groundTop(px,pw){
+    // 回傳玩家此 x 範圍下方最近可踩的 y（地面或平台頂），找不到回 null
+    let top = null;
+    // 地面
+    if(!(isGap(px) && isGap(px+pw))){
+      // 只要不是整段都在坑上，地面有效（簡化：中心點不在坑上）
+      if(!isGap(px+pw/2)) top = GROUND_Y;
+    }
+    return top;
+  }
+
+  function update(){
+    t++;
+    if(state==="dying"){ updateDeath(); return; }
+    if(state==="winning"){ updateWin(); return; }
+    if(state!=="play") return;
+    const p = player;
+
+    // 水平（即時反應）
+    const dir = (keys.right?1:0) - (keys.left?1:0);
+    if(dir!==0){
+      p.face = dir;
+      if(dir*p.vx < 0) p.vx += dir*TURN;     // 反向時加倍轉向，更利
+      else p.vx += dir*ACCEL;
+      if(Math.abs(p.vx) < 1.3) p.vx = dir*1.3; // 第一步立刻有速度，不拖泥帶水
+    } else {
+      p.vx *= (p.onGround?FRIC:0.92);
+      if(Math.abs(p.vx)<0.08) p.vx=0;
+    }
+    p.vx = Math.max(-MAXVX, Math.min(MAXVX, p.vx));
+    p.x += p.vx;
+    if(p.x < 0){ p.x=0; p.vx=0; }
+    if(Math.abs(p.vx)>0.3 && p.onGround) p.walk += Math.abs(p.vx)*0.06;
+
+    // 鬆開跳躍鍵 → 矮跳（變高度可控）
+    if(!keys.jumpHeld && p.vy<-4) p.vy=-4;
+
+    // 重力
+    p.vy += GRAV; if(p.vy>16) p.vy=16;
+    p.y += p.vy;
+
+    // 與地面 / 平台碰撞（只在下落時著地）
+    p.onGround=false;
+    const footY = p.y + p.h;
+    // 地面
+    const gTop = groundTop(p.x, p.w);
+    if(gTop!==null && p.vy>=0 && footY>=gTop && footY-p.vy<=gTop+2){
+      p.y=gTop-p.h; p.vy=0; p.onGround=true;
+    }
+    // 平台（單向：由上往下踩）
+    for(const pl of platforms){
+      if(p.x+p.w>pl.x+4 && p.x<pl.x+pl.w-4){
+        if(p.vy>=0 && footY>=pl.y && footY-p.vy<=pl.y+p.vy+2){
+          p.y=pl.y-p.h; p.vy=0; p.onGround=true;
+        }
+      }
+    }
+
+    // 跳躍：土狼時間 + 輸入緩衝（差一兩幀按也算數，跳躍更靈敏可靠）
+    if(p.onGround) coyote = COYOTE; else if(coyote>0) coyote--;
+    if(jumpBuffer>0) jumpBuffer--;
+    if(jumpBuffer>0 && coyote>0){
+      p.vy = JUMP; p.onGround=false; coyote=0; jumpBuffer=0; sfx.jump();
+    }
+
+    // 掉進坑洞 / 出界 → 死亡
+    if(p.y > VH + 120){ loseLife(); return; }
+
+    // 金幣
+    for(const c of coins){
+      if(c.got) continue;
+      if(Math.abs((p.x+p.w/2)-c.x)<26 && Math.abs((p.y+p.h/2)-c.y)<30){
+        c.got=true; coinCount++; updateHUD(); sfx.coin(); burst(c.x,c.y,"#ffd93d",10);
+      }
+    }
+
+    // 怪物
+    for(const e of enemies){
+      if(!e.alive) continue;
+      e.x += e.vx;
+      if(e.x<e.min||e.x>e.max) e.vx*=-1;
+      // 碰撞
+      if(p.x+p.w>e.x-e.w/2 && p.x<e.x+e.w/2 &&
+         p.y+p.h>e.y-e.h && p.y<e.y){
+        if(p.vy>0 && (p.y+p.h)-e.y < 22){
+          // 踩到頭頂 → 打倒
+          e.alive=false; e.dead=20; p.vy=-9; coinCount+=1; updateHUD();
+          sfx.stomp(); burst(e.x,e.y,"#9b4fb5",14);
+        } else {
+          loseLife(); return;
+        }
+      }
+    } 
+    for(const e of enemies) if(!e.alive && e.dead>0) e.dead--;
+
+    // 抵達終點旗
+    if(p.x+p.w > goal.x){ win(); }
+
+    // 相機跟隨
+    camX = Math.max(0, Math.min(LEVEL_W-VW, p.x - VW*0.38));
     updateHUD();
   }
-  // 相機
-  const tx=car.x - VW*0.34, ty=car.y - VH*0.52;
-  camX += (tx-camX)*0.12; camY += (ty-camY)*0.10;
-  if(camX<0)camX=0; if(camX>LEVEL_LEN-VW)camX=LEVEL_LEN-VW;
-  // 灰塵
-  for(const p of dust){ p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.96;p.life-=0.03; }
-  dust=dust.filter(p=>p.life>0);
-  engineUpdate();
-}
 
-// ---------- 繪圖 ----------
-let skyGrad=null;
-function draw(){
-  if(!skyGrad){ skyGrad=ctx.createLinearGradient(0,0,0,VH);
-    skyGrad.addColorStop(0,"#2b3a67"); skyGrad.addColorStop(.5,"#5b6fa8"); skyGrad.addColorStop(1,"#f7b267"); }
-  ctx.fillStyle=skyGrad; ctx.fillRect(0,0,VW,VH);
-  // 太陽光暈
-  ctx.save(); ctx.globalAlpha=.7; ctx.fillStyle="#ffe9b0";
-  ctx.beginPath(); ctx.arc(VW*0.75,120,46,0,7); ctx.fill(); ctx.restore();
-  // 遠山視差
-  parallax(camX*0.25, VH*0.55, "#41507e", 120, 0.0016);
-  parallax(camX*0.45, VH*0.62, "#34406a", 90, 0.0026);
-
-  ctx.save(); ctx.translate(-camX,-camY);
-  drawTerrain();
-  drawFinish();
-  for(const c of coins) if(!c.got) drawCoin(c);
-  for(const c of cans) if(!c.got) drawCan(c);
-  for(const p of dust){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz); }
-  ctx.globalAlpha=1;
-  drawCar();
-  ctx.restore();
-
-  if(state==="drive"){ // 翻車警示
-    const fl=Math.abs(((car.a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI);
-    if(fl>1.4){ ctx.fillStyle="rgba(255,80,80,"+Math.min(.5,(fl-1.4))+")"; ctx.fillRect(0,0,VW,VH); }
+  function loseLife(){
+    if(state==="dying") return;
+    sfx.hurt(); stopMusic();
+    // 惡搞死亡：頭「啵」一聲彈飛、旋轉升天
+    const p=player;
+    flyHead = {x:p.x+p.w/2, y:p.y+ (p.h-40), vx:(Math.random()*3-1.5), vy:-12, rot:0, vr:0.32, angel:0};
+    burst(p.x+p.w/2, p.y+10, "#ffffff", 18);
+    setTimeout(()=>sfx.boing(),40);
+    setTimeout(()=>sfx.sadTrombone(),260);
+    fx = {mode:"die", t:0, sticker:0};
+    state = "dying";
   }
-}
-function parallax(shift,baseY,color,amp,fr){
-  ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(0,VH);
-  for(let x=-100;x<VW+100;x+=12){ const y=baseY-Math.abs(Math.sin((x+shift)*fr))*amp; ctx.lineTo(x,y); }
-  ctx.lineTo(VW,VH); ctx.closePath(); ctx.fill();
-}
-function drawTerrain(){
-  const x0=Math.floor(camX-20), x1=camX+VW+20;
-  ctx.beginPath(); ctx.moveTo(x0,terrain(x0));
-  for(let x=x0;x<=x1;x+=8) ctx.lineTo(x,terrain(x));
-  ctx.lineTo(x1,camY+VH+200); ctx.lineTo(x0,camY+VH+200); ctx.closePath();
-  ctx.fillStyle="#7a4a2b"; ctx.fill();
-  // 草皮
-  ctx.beginPath(); ctx.moveTo(x0,terrain(x0));
-  for(let x=x0;x<=x1;x+=8) ctx.lineTo(x,terrain(x));
-  ctx.lineWidth=12; ctx.strokeStyle="#5cc26b"; ctx.lineJoin="round"; ctx.stroke();
-  ctx.lineWidth=4; ctx.strokeStyle="#3fa256"; ctx.stroke();
-}
-function drawFinish(){
-  const x=FINISH, top=terrain(x)-150;
-  ctx.fillStyle="#ddd"; ctx.fillRect(x-2,top,4,150);
-  // 格旗
-  for(let r=0;r<5;r++)for(let cc=0;cc<3;cc++){ ctx.fillStyle=(r+cc)%2?"#222":"#fff"; ctx.fillRect(x+3+cc*12, top+4+r*10, 12,10); }
-  ctx.fillStyle="#ffd93d"; ctx.font="bold 16px sans-serif"; ctx.textAlign="center";
-  ctx.fillText("FINISH", x+22, top-6); ctx.textAlign="start";
-}
-function drawCoin(c){ c.t+=0.12; const w=6+(Math.sin(c.t)*0.5+0.5)*14;
-  ctx.save(); ctx.translate(c.x,c.y+Math.sin(c.t*0.6)*3);
-  ctx.fillStyle="#ffd93d"; ctx.beginPath(); ctx.ellipse(0,0,Math.max(2,w/2),11,0,0,7); ctx.fill();
-  ctx.fillStyle="#ffaa00"; ctx.beginPath(); ctx.ellipse(0,0,Math.max(1,w/2-3),8,0,0,7); ctx.fill();
-  ctx.restore(); }
-function drawCan(c){ ctx.save(); ctx.translate(c.x,c.y+Math.sin(t*0.08+c.x)*2);
-  ctx.fillStyle="#e23b3b"; roundRect(-9,-12,18,22,3); ctx.fill();
-  ctx.fillStyle="#fff"; ctx.font="bold 11px sans-serif"; ctx.textAlign="center"; ctx.fillText("⛽",0,3);
-  ctx.textAlign="start"; ctx.restore(); }
+  function updateDeath(){
+    fx.t++;
+    if(flyHead){
+      flyHead.x += flyHead.vx; flyHead.y += flyHead.vy;
+      flyHead.vy += 0.5; flyHead.rot += flyHead.vr;
+      if(flyHead.y > VH-60){ flyHead.y = VH-60; flyHead.vy *= -0.4; flyHead.vx *= 0.6; }
+      if(fx.t>26) flyHead.angel = Math.min(1, (fx.t-26)/20); // 長出光環小翅膀
+    }
+    if(fx.t===60){ sfx.sticker(); fx.sticker=1; }  // 甩出「再接再厲」貼紙
+    if(fx.t>=110){
+      lives--; updateHUD();
+      flyHead=null; fx=null;
+      if(lives<=0){ state="dead"; showOverlay("dead"); }
+      else { reset(false); }  // reset 會重新開始音樂
+    }
+  }
 
-function drawCar(){
-  ctx.save(); ctx.translate(car.x,car.y); ctx.rotate(car.a);
-  // 影子
-  // 車身
-  ctx.fillStyle="#ff5c8a"; roundRect(-30,-12,60,22,8); ctx.fill();
-  ctx.fillStyle="#e23b6e"; roundRect(-30,2,60,8,4); ctx.fill();
-  // 駕駛艙
-  ctx.fillStyle="#bfe3ff"; roundRect(-12,-22,26,14,6); ctx.fill();
-  // 車手頭（可換臉）
-  drawDriverHead(ctx, 1, -20, 13);
-  // 輪子
-  drawWheel(-WB/2, AX); drawWheel(WB/2, AX);
-  ctx.restore();
-}
-function drawWheel(lx,ly){
-  ctx.save(); ctx.translate(lx,ly);
-  ctx.fillStyle="#222"; ctx.beginPath(); ctx.arc(0,0,R,0,7); ctx.fill();
-  ctx.fillStyle="#555"; ctx.beginPath(); ctx.arc(0,0,R*0.55,0,7); ctx.fill();
-  ctx.save(); ctx.rotate(car.wheelSpin); ctx.strokeStyle="#888"; ctx.lineWidth=2;
-  for(let i=0;i<4;i++){ ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(R*0.5,0); ctx.stroke(); }
-  ctx.restore();
-  ctx.fillStyle="#ffd93d"; ctx.beginPath(); ctx.arc(0,0,3,0,7); ctx.fill();
-  ctx.restore();
-}
-function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
-  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function win(){
+    if(state==="winning") return;
+    stopMusic(); sfx.fanfare();
+    lastReward = pickReward();
+    fx = {mode:"win", t:0, stamp:0};
+    state = "winning";
+    // 彩虹紙花噴射
+    const colors=["#ff5c8a","#ffd93d","#3ddc97","#8aa4ff","#ff9e7d","#a06cd5"];
+    for(let i=0;i<70;i++){
+      const a=-Math.PI/2 + (Math.random()-0.5)*1.4, sp=4+Math.random()*7;
+      particles.push({x:player.x+player.w/2, y:player.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+                      life:1.4, color:colors[i%colors.length], size:3+Math.random()*4});
+    }
+  }
+  function updateWin(){
+    fx.t++;
+    // 角色慶祝原地小跳
+    const p=player;
+    if(p.onGround && fx.t%24===0){ p.vy=-7; sfx.coin(); }
+    p.vy += GRAV; p.y += p.vy;
+    if(p.y+p.h >= GROUND_Y){ p.y=GROUND_Y-p.h; p.vy=0; p.onGround=true; }
+    // 持續放煙火
+    if(fx.t%26===0){
+      sfx.firework();
+      const fx2=camX+VW*(0.25+Math.random()*0.5), fy2=VH*(0.2+Math.random()*0.25);
+      const colors=["#ff5c8a","#ffd93d","#3ddc97","#8aa4ff"];
+      for(let i=0;i<22;i++){ const a=Math.random()*Math.PI*2, sp=2+Math.random()*4;
+        particles.push({x:fx2,y:fy2,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,
+                        color:colors[i%colors.length],size:2+Math.random()*3}); }
+    }
+    if(fx.t===20){ sfx.stamp(); fx.stamp=1; } // 印章砸下
+    if(fx.t>=120){ fx=null; state="win"; showOverlay("win"); }
+  }
 
-// ---------- 主迴圈 ----------
-function loop(){ update(); draw(); requestAnimationFrame(loop); }
+  function showOverlay(kind){
+    const h=overlay.querySelector("h1"), sub=overlay.querySelector(".sub"),
+          btn=document.getElementById("startBtn"), keysEl=overlay.querySelector(".keys"),
+          hint=overlay.querySelector(".hint");
+    overlay.classList.remove("hidden");
+    keysEl.style.display="none";
+    if(kind==="win"){
+      h.textContent="🏆 通關啦！";
+      sub.innerHTML=`<div style="font-size:1.05em;margin-bottom:10px">恭喜過關！金幣 <b>${coinCount}</b> 顆</div>`+
+        `<div style="background:rgba(255,255,255,.1);border:2px dashed var(--coin);border-radius:14px;`+
+        `padding:14px 18px;display:inline-block;margin:4px 0">🎖️ 神秘獎勵<br><b style="font-size:1.25em">${lastReward}</b></div>`+
+        `<div style="margin-top:10px;opacity:.85">換個人頭再玩一次，截圖傳給朋友 😆</div>`;
+      btn.textContent="再玩一次"; hint.textContent="每次過關獎勵都不一樣，試試手氣！";
+    } else {
+      h.textContent="💀 失敗了";
+      sub.innerHTML=`金幣 <b>${coinCount}</b> 顆。別氣餒，再衝一次！`;
+      btn.textContent="重新挑戰"; hint.textContent="踩怪物頭頂才能打倒牠，小心坑洞";
+    }
+    drawTitleFace();
+  }
 
-// 初始化
-document.getElementById("startTip").innerHTML="💡 <b>AI 小知識：</b>"+curTip();
-updateHUD(); drawTitleFace(); resize();
-resetCar(); seedItems();
-loop();
+  // =================== 繪圖 ===================
+  let skyGrad = null;
+  function draw(){
+    // 天空漸層（快取一次，避免每幀重建）
+    if(!skyGrad){
+      skyGrad = ctx.createLinearGradient(0,0,0,VH);
+      skyGrad.addColorStop(0,"#ffd6a5"); skyGrad.addColorStop(.45,"#ff9e7d"); skyGrad.addColorStop(1,"#a06cd5");
+    }
+    ctx.fillStyle=skyGrad; ctx.fillRect(0,0,VW,VH);
+
+    // 太陽
+    ctx.save();
+    ctx.globalAlpha=.85; ctx.fillStyle="#fff2c9";
+    ctx.beginPath(); ctx.arc(VW-120,110,56,0,7); ctx.fill();
+    ctx.globalAlpha=.18; ctx.beginPath(); ctx.arc(VW-120,110,86,0,7); ctx.fill();
+    ctx.restore();
+
+    // 遠山（視差）
+    drawHills(camX*0.3, GROUND_Y-30, "#b683d6", 1.0);
+    drawHills(camX*0.5, GROUND_Y-10, "#9d6bc4", 1.3);
+
+    // 雲
+    ctx.fillStyle="rgba(255,255,255,.85)";
+    for(let i=0;i<8;i++){
+      const cx=((i*640 - camX*0.4)%(LEVEL_W)) ; const cy=70+ (i%3)*46;
+      cloud(cx, cy);
+    }
+
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    drawGround();
+    platforms.forEach(drawPlatform);
+    coins.forEach(drawCoin);
+    drawGoal();
+    enemies.forEach(drawEnemy);
+    drawParticles();
+    if(state==="dying"){ drawCrumpledBody(); drawFlyHead(); }
+    else { drawPlayer(); }
+
+    ctx.restore();
+
+    // 螢幕空間特效（不隨鏡頭移動）：印章 / 貼紙
+    if(state==="winning") drawWinStamp();
+    if(state==="dying")   drawDeathSticker();
+  }
+
+  // 死亡：身體垮掉（無頭）
+  function drawCrumpledBody(){
+    const p=player;
+    ctx.save();
+    ctx.translate(p.x+p.w/2, GROUND_Y);
+    ctx.fillStyle="rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(0,-2,20,5,0,0,7); ctx.fill();
+    // 攤平的身體
+    ctx.fillStyle="#3ddc97"; roundRect(-16,-16,32,16,7); ctx.fill();
+    ctx.fillStyle="#ffc59e"; ctx.fillRect(-22,-12,7,8); ctx.fillRect(15,-12,7,8); // 攤開的手
+    ctx.fillStyle="#2e2442"; ctx.fillRect(-12,-4,9,5); ctx.fillRect(3,-4,9,5);
+    ctx.restore();
+  }
+  // 死亡：彈飛旋轉的頭（帶上傳人頭 / 內建臉）+ 升天光環小翅膀
+  function drawFlyHead(){
+    if(!flyHead) return;
+    ctx.save();
+    ctx.translate(flyHead.x, flyHead.y);
+    // 光環
+    if(flyHead.angel>0){
+      ctx.globalAlpha=flyHead.angel;
+      ctx.strokeStyle="#ffe27a"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(0,-26,12,4,0,0,7); ctx.stroke();
+      // 小翅膀
+      ctx.fillStyle="rgba(255,255,255,.92)";
+      ctx.beginPath(); ctx.ellipse(-22,-2,8,12,0.5,0,7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(22,-2,8,12,-0.5,0,7); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    ctx.rotate(flyHead.rot);
+    const R=18;
+    if(headImg){
+      const iw=headImg.naturalWidth||headImg.width, ih=headImg.naturalHeight||headImg.height;
+      const s=Math.min(46/iw,52/ih), dw=iw*s, dh=ih*s;
+      ctx.drawImage(headImg,-dw/2,-dh/2,dw,dh);
+    } else {
+      drawFace(ctx,0,0,R);
+    }
+    // 暈頭轉向的 X 眼（疊在內建臉上時才畫）
+    if(!headImg){
+      ctx.strokeStyle="#241734"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(-9,-3);ctx.lineTo(-3,3); ctx.moveTo(-3,-3);ctx.lineTo(-9,3);
+      ctx.moveTo(3,-3);ctx.lineTo(9,3); ctx.moveTo(9,-3);ctx.lineTo(3,3); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 死亡：甩出「再接再厲」貼紙（螢幕空間）
+  function drawDeathSticker(){
+    if(!fx || !fx.sticker) return;
+    const prog = Math.min(1,(fx.t-60)/12);
+    const sc = 1.25 - 0.25*prog;
+    ctx.save();
+    ctx.translate(VW*0.5, VH*0.42);
+    ctx.rotate(-0.18); ctx.scale(sc,sc);
+    ctx.fillStyle="#ff5c8a"; roundRect(-92,-30,184,60,14); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.lineWidth=3; ctx.strokeStyle="#fff";
+    roundRect(-92,-30,184,60,14); ctx.stroke();
+    ctx.fillStyle="#fff"; ctx.font="bold 30px 'Trebuchet MS',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("再接再厲！", 0, 2);
+    ctx.restore();
+    ctx.textAlign="start"; ctx.textBaseline="alphabetic";
+  }
+  // 過關：「通關!」印章砸下（螢幕空間）
+  function drawWinStamp(){
+    if(!fx || !fx.stamp) return;
+    const prog = Math.min(1,(fx.t-20)/14);
+    const sc = 2.2 - 1.2*prog + (prog>=1?Math.sin(fx.t*0.2)*0.02:0);
+    ctx.save();
+    ctx.translate(VW*0.5, VH*0.3);
+    ctx.rotate(-0.12); ctx.scale(sc,sc);
+    ctx.globalAlpha = Math.min(1,prog+0.3);
+    ctx.lineWidth=5; ctx.strokeStyle="#ff3b3b";
+    roundRect(-86,-34,172,68,12); ctx.stroke();
+    ctx.fillStyle="#ff3b3b"; ctx.font="bold 44px 'Trebuchet MS',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("通關!", 0, 2);
+    ctx.restore();
+    ctx.globalAlpha=1; ctx.textAlign="start"; ctx.textBaseline="alphabetic";
+  }
+
+  function drawHills(shift,baseY,color,sc){
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.moveTo(0,VH);
+    for(let x=-200;x<VW+200;x+=10){
+      const y=baseY - Math.abs(Math.sin((x+shift)*0.004))*90*sc;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(VW,VH); ctx.closePath(); ctx.fill();
+  }
+  function cloud(x,y){
+    ctx.beginPath();
+    ctx.arc(x,y,18,0,7); ctx.arc(x+20,y+4,22,0,7);
+    ctx.arc(x+44,y,16,0,7); ctx.arc(x+22,y-10,18,0,7);
+    ctx.fill();
+  }
+
+  function drawGround(){
+    const startX = Math.floor(camX/T)*T;
+    for(let x=startX; x<camX+VW+T; x+=T){
+      if(isGap(x+T/2)) continue;
+      // 草皮頂
+      ctx.fillStyle="#8fbf5f";
+      ctx.fillRect(x, GROUND_Y, T, 10);
+      ctx.fillStyle="#6fa343";
+      for(let i=0;i<T;i+=8){ ctx.fillRect(x+i, GROUND_Y, 4, 14); }
+      // 泥土
+      ctx.fillStyle="#7a4a2b"; ctx.fillRect(x, GROUND_Y+10, T, VH-GROUND_Y);
+      ctx.fillStyle="rgba(0,0,0,.12)";
+      ctx.fillRect(x, GROUND_Y+10, 2, VH-GROUND_Y);
+      ctx.fillStyle="#8a5736";
+      ctx.fillRect(x+8, GROUND_Y+24, 8, 8); ctx.fillRect(x+24, GROUND_Y+40, 8, 8);
+    }
+  }
+
+  function drawPlatform(p){
+    ctx.fillStyle="#c97b4a";
+    roundRect(p.x,p.y,p.w,20,6); ctx.fill();
+    ctx.fillStyle="#a85f33";
+    for(let i=0;i<p.w;i+=24){ ctx.fillRect(p.x+i+4,p.y+12,16,5); }
+    ctx.fillStyle="rgba(255,255,255,.25)";
+    ctx.fillRect(p.x,p.y,p.w,4);
+  }
+
+  function drawCoin(c){
+    if(c.got) return;
+    c.t+=0.12;
+    const wob = Math.sin(c.t)*0.5+0.5; // 0..1 旋轉
+    const w = 6 + wob*16;
+    ctx.save();
+    ctx.translate(c.x, c.y + Math.sin(c.t*0.6)*3);
+    ctx.fillStyle="#ffd93d";
+    ctx.beginPath(); ctx.ellipse(0,0,w/2,12,0,0,7); ctx.fill();
+    ctx.fillStyle="#ffaa00";
+    ctx.beginPath(); ctx.ellipse(0,0,Math.max(1,w/2-3),9,0,0,7); ctx.fill();
+    ctx.fillStyle="#fff6c2";
+    ctx.fillRect(-1,-7,2,14);
+    ctx.restore();
+  }
+
+  function drawEnemy(e){
+    ctx.save();
+    if(!e.alive){
+      // 被踩扁
+      ctx.translate(e.x,e.y);
+      ctx.fillStyle="#7a3b8f";
+      ctx.beginPath(); ctx.ellipse(0,e.dead?6:10,e.w/2,Math.max(3,e.dead/2),0,0,7); ctx.fill();
+      ctx.restore(); return;
+    }
+    e.wob+=0.15;
+    const bob=Math.sin(e.wob)*2;
+    ctx.translate(e.x, e.y-e.h/2+bob);
+    // 身體
+    ctx.fillStyle="#9b4fb5";
+    ctx.beginPath(); ctx.ellipse(0,0,e.w/2,e.h/2,0,0,7); ctx.fill();
+    ctx.fillStyle="#7a3b8f";
+    ctx.beginPath(); ctx.ellipse(0,e.h/3,e.w/2,e.h/4,0,0,7); ctx.fill();
+    // 腳
+    ctx.fillStyle="#3a1f47";
+    ctx.fillRect(-10,e.h/2-4,8,6); ctx.fillRect(2,e.h/2-4,8,6);
+    // 眼睛
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(-6,-4,5,0,7); ctx.arc(6,-4,5,0,7); ctx.fill();
+    ctx.fillStyle="#241734";
+    const ed = e.vx>0?1.5:-1.5;
+    ctx.beginPath(); ctx.arc(-6+ed,-4,2.4,0,7); ctx.arc(6+ed,-4,2.4,0,7); ctx.fill();
+    // 眉（生氣）
+    ctx.strokeStyle="#241734"; ctx.lineWidth=2; ctx.beginPath();
+    ctx.moveTo(-10,-9); ctx.lineTo(-2,-6); ctx.moveTo(10,-9); ctx.lineTo(2,-6); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGoal(){
+    const x=goal.x, top=GROUND_Y-260;
+    // 柱
+    ctx.fillStyle="#e8e8e8"; ctx.fillRect(x-3, top, 6, 260);
+    ctx.fillStyle="#bbb"; ctx.fillRect(x-3, top, 2, 260);
+    // 旗
+    const fl=Math.sin(t*0.12)*4;
+    ctx.fillStyle="#3ddc97";
+    ctx.beginPath();
+    ctx.moveTo(x+3,top+8);
+    ctx.lineTo(x+58+fl,top+24);
+    ctx.lineTo(x+3,top+44);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 18px Trebuchet MS";
+    ctx.fillText("✓", x+22, top+31);
+    // 底座
+    ctx.fillStyle="#2a9d6e"; roundRect(x-22,GROUND_Y-18,44,18,4); ctx.fill();
+  }
+
+  function drawPlayer(){
+    const p=player;
+    ctx.save();
+    ctx.translate(p.x+p.w/2, p.y);
+    const bob = p.onGround ? Math.sin(p.walk)*2 : 0;
+
+    // 影子
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    ctx.beginPath(); ctx.ellipse(0, p.h+4, 18, 5, 0,0,7); ctx.fill();
+
+    ctx.scale(p.face,1);
+
+    // 腿（走路擺動）
+    const legSwing = p.onGround ? Math.sin(p.walk)*6 : 4;
+    ctx.fillStyle="#3a2e52";
+    ctx.fillRect(-10, p.h-16+bob, 8, 16+legSwing*0); // 固定身高，用 x 擺
+    ctx.save();
+    ctx.fillStyle="#2e2442";
+    ctx.fillRect(-11+legSwing, p.h-14+bob, 9, 16);
+    ctx.fillRect(2-legSwing,  p.h-14+bob, 9, 16);
+    ctx.fillStyle="#ff5c8a"; // 鞋
+    ctx.fillRect(-13+legSwing, p.h+0+bob, 12, 6);
+    ctx.fillRect(1-legSwing,  p.h+0+bob, 12, 6);
+    ctx.restore();
+
+    // 身體（吊帶褲風格原創）
+    ctx.fillStyle="#3ddc97";
+    roundRect(-13, p.h-30+bob, 26, 24, 7); ctx.fill();
+    ctx.fillStyle="#2bbd80";
+    ctx.fillRect(-13, p.h-30+bob, 26, 6);
+    // 鈕扣
+    ctx.fillStyle="#ffd93d";
+    ctx.beginPath(); ctx.arc(-6,p.h-22+bob,2.2,0,7); ctx.arc(6,p.h-22+bob,2.2,0,7); ctx.fill();
+    // 手臂
+    ctx.fillStyle="#ffc59e";
+    ctx.fillRect(-17, p.h-28+bob, 6, 14);
+    ctx.fillRect(11,  p.h-28+bob, 6, 14);
+
+    // ===== 人頭（可替換）=====
+    const hx=0, hy=p.h-40+bob, R=18;
+    ctx.scale(p.face,1); // 還原成正向，避免上傳的臉左右顛倒
+    if(headImg){
+      // 上傳的人頭：保留原始比例完整顯示（contain），不裁圓、不裁邊
+      const iw = headImg.naturalWidth  || headImg.width;
+      const ih = headImg.naturalHeight || headImg.height;
+      const MW = 50, MH = 60;                 // 人頭最大框（大頭效果）
+      const s  = Math.min(MW/iw, MH/ih);
+      const dw = iw*s, dh = ih*s;
+      const bottomY = p.h-18+bob;             // 臉底貼近領口
+      // 落地陰影，讓臉看起來有貼在身體上
+      ctx.save();
+      ctx.globalAlpha=.18; ctx.fillStyle="#000";
+      ctx.beginPath(); ctx.ellipse(0, bottomY-2, dw*0.32, 4, 0, 0, 7); ctx.fill();
+      ctx.restore();
+      ctx.drawImage(headImg, -dw/2, bottomY-dh, dw, dh);
+    } else {
+      drawDefaultFace(ctx, hx, hy, R);
+    }
+    ctx.restore();
+  }
+
+  // 內建搞笑表情（全原創手繪），可一鍵切換
+  function faceBase(c,x,y,R,skin,hair){
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y,R,0,7); c.fill();
+    if(hair){ c.fillStyle=hair; c.beginPath(); c.arc(x,y-2,R,Math.PI*1.05,Math.PI*1.95); c.fill(); }
+  }
+  const presetFaces = [
+    // 0 笑臉
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffd93d","#e8b800");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-1,2.6,0,7); c.arc(x+6,y-1,2.6,0,7); c.fill();
+      c.fillStyle="rgba(255,92,138,.5)"; c.beginPath(); c.arc(x-9,y+5,3,0,7); c.arc(x+9,y+5,3,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.arc(x,y+3,6,0.15*Math.PI,0.85*Math.PI); c.stroke(); },
+    // 1 偷笑（瞇眼大笑）
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffcf5a","#d99a2b");
+      c.strokeStyle="#241734"; c.lineWidth=2.4;
+      c.beginPath(); c.arc(x-6,y+1,4,1.1*Math.PI,1.9*Math.PI); c.arc(x+6,y+1,4,1.1*Math.PI,1.9*Math.PI); c.stroke();
+      c.fillStyle="rgba(255,92,138,.55)"; c.beginPath(); c.arc(x-10,y+6,3.5,0,7); c.arc(x+10,y+6,3.5,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x,y+7,6,0,Math.PI); c.fill();
+      c.fillStyle="#ff5c8a"; c.beginPath(); c.arc(x,y+9,4,0,Math.PI); c.fill(); },
+    // 2 墨鏡酷臉
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#f0b27a","#3a2e2e");
+      c.fillStyle="#241734"; c.fillRect(x-12,y-4,9,7); c.fillRect(x+3,y-4,9,7); c.fillRect(x-3,y-2,6,2);
+      c.fillStyle="rgba(255,255,255,.4)"; c.fillRect(x-11,y-3,3,2); c.fillRect(x+4,y-3,3,2);
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.moveTo(x-5,y+8); c.lineTo(x+5,y+8); c.stroke(); },
+    // 3 吐舌
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ffd93d","#e8b800");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-2,2.6,0,7); c.arc(x+6,y-2,2.6,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath(); c.arc(x,y+2,5,0,Math.PI); c.stroke();
+      c.fillStyle="#ff5c8a"; c.beginPath(); c.moveTo(x-4,y+5); c.lineTo(x+4,y+5); c.lineTo(x+2,y+12); c.arc(x,y+11,3,0,Math.PI); c.fill(); },
+    // 4 震驚
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#fbe6a2","#c9a24b");
+      c.fillStyle="#fff"; c.beginPath(); c.arc(x-6,y-2,4,0,7); c.arc(x+6,y-2,4,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y-2,2,0,7); c.arc(x+6,y-2,2,0,7); c.fill();
+      c.fillStyle="#241734"; c.beginPath(); c.ellipse(x,y+7,3.5,5,0,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=1.6; c.beginPath(); c.moveTo(x-11,y-9); c.lineTo(x-3,y-8); c.moveTo(x+11,y-9); c.lineTo(x+3,y-8); c.stroke(); },
+    // 5 生氣
+    (c,x,y,R)=>{ faceBase(c,x,y,R,"#ff9e7d","#8a2e1a");
+      c.fillStyle="#241734"; c.beginPath(); c.arc(x-6,y,2.4,0,7); c.arc(x+6,y,2.4,0,7); c.fill();
+      c.strokeStyle="#241734"; c.lineWidth=2.4; c.beginPath();
+      c.moveTo(x-11,y-7); c.lineTo(x-2,y-3); c.moveTo(x+11,y-7); c.lineTo(x+2,y-3); c.stroke();
+      c.beginPath(); c.arc(x,y+9,5,1.1*Math.PI,1.9*Math.PI); c.stroke(); }
+  ];
+  function drawFace(c,x,y,R){ (presetFaces[faceIndex] || presetFaces[0])(c,x,y,R); }
+  // 相容舊呼叫名
+  function drawDefaultFace(c,x,y,R){ drawFace(c,x,y,R); }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+
+  // ---- 主迴圈 ----
+  // 每一幀跑一次更新與繪製，最單純也最順（避免固定步長累積造成的頓挫）。
+  function loop(){
+    update();
+    updateParticles();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // 初始化
+  resize(); seedCoins(); seedEnemies(); drawTitleFace(); loop();
 })();
 </script>
 </body>
