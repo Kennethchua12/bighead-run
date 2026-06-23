@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>大頭闖關 BigHead Run</title>
+<style>
+  :root{
+    --sky-top:#ffd6a5; --sky-mid:#ff9e7d; --sky-bot:#a06cd5;
+    --ground:#6b4226; --ground-top:#8fbf5f; --brick:#c97b4a;
+    --coin:#ffd93d; --ink:#241734; --panel:rgba(36,23,52,.82);
+    --accent:#ff5c8a; --accent2:#3ddc97; --paper:#fff4e6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:#1a1026;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
+
+  /* 頂部資訊列 HUD */
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;gap:14px;align-items:center;
+       padding:10px 14px;color:var(--paper);font-weight:bold;pointer-events:none;
+       text-shadow:0 2px 0 rgba(0,0,0,.35);z-index:5}
+  .stat{display:flex;align-items:center;gap:6px;background:var(--panel);
+        padding:6px 12px;border-radius:999px;font-size:15px;backdrop-filter:blur(4px)}
+  .stat b{color:var(--coin)}
+  #spacer{flex:1}
+  .btn{pointer-events:auto;cursor:pointer;border:none;border-radius:999px;
+       font-weight:bold;font-family:inherit;padding:8px 14px;font-size:14px;color:#fff;
+       background:var(--accent);box-shadow:0 3px 0 #b8345e;transition:transform .05s}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #b8345e}
+  .btn.alt{background:#5a4a78;box-shadow:0 3px 0 #3a2e52}
+  .btn.alt:active{box-shadow:0 1px 0 #3a2e52}
+
+  /* 覆蓋層 overlay：開始 / 通關 / 失敗 */
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;gap:18px;text-align:center;color:var(--paper);
+           background:radial-gradient(circle at 50% 30%,rgba(160,108,213,.35),rgba(26,16,38,.92));
+           backdrop-filter:blur(6px);z-index:10;padding:24px}
+  #overlay.hidden{display:none}
+  #overlay h1{font-size:clamp(34px,9vw,72px);letter-spacing:1px;
+              background:linear-gradient(180deg,#fff4e6,var(--coin));
+              -webkit-background-clip:text;background-clip:text;color:transparent;
+              filter:drop-shadow(0 4px 0 rgba(0,0,0,.3));line-height:1}
+  #overlay .sub{font-size:clamp(13px,3.4vw,17px);opacity:.92;max-width:520px;line-height:1.6}
+  #overlay .keys{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;opacity:.9;font-size:13px}
+  .key{background:var(--panel);border:1px solid rgba(255,255,255,.15);
+       padding:5px 11px;border-radius:8px;min-width:34px}
+  #overlay .big{font-size:18px;padding:14px 30px;border-radius:14px;box-shadow:0 5px 0 #b8345e}
+  #overlay .big:active{box-shadow:0 2px 0 #b8345e}
+  .titleface{width:96px;height:96px;border-radius:50%;border:5px solid var(--paper);
+             box-shadow:0 6px 0 rgba(0,0,0,.25);object-fit:cover;background:#ffd93d}
+
+  /* 手機觸控鍵 */
+  #touch{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;
+         padding:18px 22px calc(18px + env(safe-area-inset-bottom));pointer-events:none;z-index:6}
+  #touch .pad{display:flex;gap:14px;pointer-events:auto}
+  .tbtn{width:66px;height:66px;border-radius:50%;border:none;font-size:26px;color:#fff;
+        background:var(--panel);box-shadow:0 4px 0 rgba(0,0,0,.4);
+        display:flex;align-items:center;justify-content:center;user-select:none}
+  .tbtn.jump{width:84px;height:84px;background:var(--accent);box-shadow:0 4px 0 #b8345e;font-size:30px}
+  .tbtn:active{transform:translateY(3px)}
+  @media (pointer:coarse){#touch{display:flex}}
+
+  .hint{font-size:12px;opacity:.7;margin-top:-6px}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+
+<div id="hud">
+  <div class="stat">🪙 <b id="coins">0</b></div>
+  <div class="stat">❤️ <span id="lives">3</span></div>
+  <div class="stat">🏁 <span id="dist">0</span>m</div>
+  <div id="spacer"></div>
+  <button class="btn" id="uploadBtn">📷 換人頭</button>
+  <button class="btn alt" id="resetBtn">↻ 重來</button>
+</div>
+
+<div id="overlay">
+  <img id="titleFace" class="titleface" alt="">
+  <h1>大頭闖關</h1>
+  <div class="sub">
+    踩怪、吃金幣、衝向終點旗 🚩<br>
+    最好玩的是 ——按「換人頭」上傳你朋友那張<b>爆笑偷笑臉</b>，主角立刻變成他！
+  </div>
+  <div class="keys">
+    <span class="key">← →</span><span>移動</span>
+    <span class="key">空白 / ↑</span><span>跳躍</span>
+    <span class="key">手機</span><span>下方按鈕</span>
+  </div>
+  <button class="btn big" id="startBtn">開始闖關</button>
+  <div class="hint">提示：踩在怪物頭上能打倒牠，正面撞到會扣血</div>
+</div>
+
+<div id="touch">
+  <div class="pad">
+    <button class="tbtn" data-k="left">◀</button>
+    <button class="tbtn" data-k="right">▶</button>
+  </div>
+  <div class="pad">
+    <button class="tbtn jump" data-k="jump">⤒</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*">
+
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+
+  // ---- 顯示縮放 ----
+  let VW = 900, VH = 506, scale = 1, offX = 0, offY = 0;
+  function resize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    scale = Math.min(w / VW, h / VH);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = VW * scale * dpr;
+    canvas.height = VH * scale * dpr;
+    canvas.style.width = (VW * scale) + "px";
+    canvas.style.height = (VH * scale) + "px";
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+
+  // ---- 關卡定義（原創設計）----
+  // 地面用磚塊段表示，浮空平台、金幣、怪物、終點旗
+  const T = 40; // 磚塊單位
+  const GROUND_Y = VH - 80;
+  const LEVEL_W = 5200;
+
+  // 地面缺口（坑洞）：[起點, 終點]
+  const gaps = [[1180,1320],[2460,2600],[3680,3820]];
+  function isGap(x){ return gaps.some(g => x > g[0] && x < g[1]); }
+
+  // 浮空平台 platforms：{x,y,w}
+  const platforms = [
+    {x:520,y:GROUND_Y-130,w:120},
+    {x:740,y:GROUND_Y-220,w:120},
+    {x:1120,y:GROUND_Y-150,w:180}, // 跨第一個坑
+    {x:1560,y:GROUND_Y-120,w:120},
+    {x:1780,y:GROUND_Y-210,w:120},
+    {x:2000,y:GROUND_Y-300,w:120},
+    {x:2400,y:GROUND_Y-150,w:200}, // 跨第二個坑
+    {x:2900,y:GROUND_Y-130,w:120},
+    {x:3120,y:GROUND_Y-230,w:120},
+    {x:3340,y:GROUND_Y-330,w:120},
+    {x:3620,y:GROUND_Y-160,w:200}, // 跨第三個坑
+    {x:4100,y:GROUND_Y-140,w:120},
+    {x:4320,y:GROUND_Y-240,w:120},
+    {x:4600,y:GROUND_Y-330,w:160},
+  ];
+
+  // 金幣
+  let coins = [];
+  function seedCoins(){
+    coins = [];
+    const add=(x,y)=>coins.push({x,y,got:false,t:Math.random()*6});
+    // 平台上方的金幣串
+    platforms.forEach(p=>{ for(let i=0;i<3;i++) add(p.x+30+i*40, p.y-46); });
+    // 地面途中的金幣串
+    for(let x=300;x<LEVEL_W-300;x+=260){
+      if(isGap(x)) continue;
+      add(x, GROUND_Y-50); add(x+40, GROUND_Y-90); add(x+80, GROUND_Y-50);
+    }
+  }
+
+  // 怪物 enemies：地面巡邏的小團子
+  let enemies = [];
+  function seedEnemies(){
+    enemies = [
+      {x:640,min:560,max:840,vx:1.1},
+      {x:1640,min:1500,max:1900,vx:1.3},
+      {x:2200,min:2120,max:2360,vx:1.0},
+      {x:2950,min:2880,max:3120,vx:1.4},
+      {x:4200,min:4060,max:4380,vx:1.2},
+    ].map(e=>({...e,y:GROUND_Y-34,w:36,h:34,alive:true,dead:0,wob:Math.random()*6}));
+  }
+
+  const goal = {x:5000, y:GROUND_Y};
+
+  // ---- 玩家 ----
+  const player = {
+    x:80, y:GROUND_Y-60, w:34, h:54, vx:0, vy:0,
+    onGround:false, face:1, alive:true, win:false, blink:0, walk:0
+  };
+
+  // ---- 狀態 ----
+  let state = "menu"; // menu | play | dead | win
+  let coinCount = 0, lives = 3, camX = 0, t = 0;
+  const keys = {left:false, right:false, jump:false, jumpHeld:false};
+
+  // ---- 人頭圖（可上傳替換）----
+  let headImg = null;
+  const fileInput = document.getElementById("fileInput");
+  function pickFile(){ fileInput.click(); }
+  fileInput.addEventListener("change", e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = ()=>{ headImg = img; drawTitleFace(); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+  document.getElementById("uploadBtn").onclick = pickFile;
+
+  // 把目前人頭畫到開始畫面的圓形預覽
+  function drawTitleFace(){
+    const c = document.createElement("canvas"); c.width=c.height=120;
+    const x = c.getContext("2d");
+    if(headImg){
+      const s = Math.min(headImg.width, headImg.height);
+      x.drawImage(headImg,(headImg.width-s)/2,(headImg.height-s)/2,s,s,0,0,120,120);
+    } else {
+      drawDefaultFace(x,60,60,52);
+    }
+    document.getElementById("titleFace").src = c.toDataURL();
+  }
+
+  // ---- 物理常數 ----
+  const GRAV=0.62, MOVE=0.9, MAXVX=4.6, FRIC=0.82, JUMP=-13.2, AIR=0.6;
+
+  function reset(full){
+    player.x=80; player.y=GROUND_Y-60; player.vx=0; player.vy=0;
+    player.alive=true; player.win=false; player.face=1;
+    camX=0;
+    if(full){ coinCount=0; lives=3; seedCoins(); seedEnemies(); }
+    state="play"; overlay.classList.add("hidden");
+    updateHUD();
+  }
+  document.getElementById("resetBtn").onclick = ()=>{ reset(true); };
+
+  // ---- 輸入 ----
+  const keyMap = {ArrowLeft:"left",KeyA:"left",ArrowRight:"right",KeyD:"right",
+                  ArrowUp:"jump",KeyW:"jump",Space:"jump"};
+  addEventListener("keydown",e=>{
+    const k=keyMap[e.code]; if(!k) return; e.preventDefault();
+    keys[k]=true; if(k==="jump") keys.jumpHeld=true;
+  });
+  addEventListener("keyup",e=>{
+    const k=keyMap[e.code]; if(!k) return;
+    keys[k]=false; if(k==="jump") keys.jumpHeld=false;
+  });
+  document.querySelectorAll("#touch .tbtn").forEach(b=>{
+    const k=b.dataset.k;
+    const on=e=>{e.preventDefault();keys[k]=true;if(k==="jump")keys.jumpHeld=true;};
+    const off=e=>{e.preventDefault();keys[k]=false;if(k==="jump")keys.jumpHeld=false;};
+    b.addEventListener("touchstart",on,{passive:false});
+    b.addEventListener("touchend",off,{passive:false});
+    b.addEventListener("touchcancel",off,{passive:false});
+    b.addEventListener("mousedown",on); b.addEventListener("mouseup",off);
+    b.addEventListener("mouseleave",off);
+  });
+  document.getElementById("startBtn").onclick = ()=>{ reset(true); };
+
+  // ---- HUD ----
+  function updateHUD(){
+    document.getElementById("coins").textContent = coinCount;
+    document.getElementById("lives").textContent = "❤️".repeat(Math.max(0,lives)) || "—";
+    document.getElementById("dist").textContent = Math.max(0,Math.round(player.x/40));
+  }
+
+  // ---- 碰撞輔助：玩家踩地面或平台 ----
+  function groundTop(px,pw){
+    // 回傳玩家此 x 範圍下方最近可踩的 y（地面或平台頂），找不到回 null
+    let top = null;
+    // 地面
+    if(!(isGap(px) && isGap(px+pw))){
+      // 只要不是整段都在坑上，地面有效（簡化：中心點不在坑上）
+      if(!isGap(px+pw/2)) top = GROUND_Y;
+    }
+    return top;
+  }
+
+  function update(){
+    t++;
+    if(state!=="play") return;
+    const p = player;
+
+    // 水平
+    if(keys.left){ p.vx -= MOVE; p.face=-1; }
+    if(keys.right){ p.vx += MOVE; p.face=1; }
+    if(!keys.left && !keys.right) p.vx *= (p.onGround?FRIC:0.94);
+    p.vx = Math.max(-MAXVX, Math.min(MAXVX, p.vx));
+    if(Math.abs(p.vx)<0.05) p.vx=0;
+    p.x += p.vx;
+    if(p.x < 0){ p.x=0; p.vx=0; }
+    if(Math.abs(p.vx)>0.3 && p.onGround) p.walk += Math.abs(p.vx)*0.06;
+
+    // 跳躍
+    if(keys.jump && p.onGround){ p.vy=JUMP; p.onGround=false; }
+    if(!keys.jumpHeld && p.vy<-4) p.vy=-4; // 鬆手變矮跳
+
+    // 重力
+    p.vy += GRAV; if(p.vy>16) p.vy=16;
+    p.y += p.vy;
+
+    // 與地面 / 平台碰撞（只在下落時著地）
+    p.onGround=false;
+    const footY = p.y + p.h;
+    // 地面
+    const gTop = groundTop(p.x, p.w);
+    if(gTop!==null && p.vy>=0 && footY>=gTop && footY-p.vy<=gTop+2){
+      p.y=gTop-p.h; p.vy=0; p.onGround=true;
+    }
+    // 平台（單向：由上往下踩）
+    for(const pl of platforms){
+      if(p.x+p.w>pl.x+4 && p.x<pl.x+pl.w-4){
+        if(p.vy>=0 && footY>=pl.y && footY-p.vy<=pl.y+p.vy+2){
+          p.y=pl.y-p.h; p.vy=0; p.onGround=true;
+        }
+      }
+    }
+
+    // 掉進坑洞 / 出界 → 死亡
+    if(p.y > VH + 120){ loseLife(); return; }
+
+    // 金幣
+    for(const c of coins){
+      if(c.got) continue;
+      if(Math.abs((p.x+p.w/2)-c.x)<26 && Math.abs((p.y+p.h/2)-c.y)<30){
+        c.got=true; coinCount++; updateHUD();
+      }
+    }
+
+    // 怪物
+    for(const e of enemies){
+      if(!e.alive) continue;
+      e.x += e.vx;
+      if(e.x<e.min||e.x>e.max) e.vx*=-1;
+      // 碰撞
+      if(p.x+p.w>e.x-e.w/2 && p.x<e.x+e.w/2 &&
+         p.y+p.h>e.y-e.h && p.y<e.y){
+        if(p.vy>0 && (p.y+p.h)-e.y < 22){
+          // 踩到頭頂 → 打倒
+          e.alive=false; e.dead=20; p.vy=-9; coinCount+=1; updateHUD();
+        } else {
+          loseLife(); return;
+        }
+      }
+    } 
+    for(const e of enemies) if(!e.alive && e.dead>0) e.dead--;
+
+    // 抵達終點旗
+    if(p.x+p.w > goal.x){ win(); }
+
+    // 相機跟隨
+    camX = Math.max(0, Math.min(LEVEL_W-VW, p.x - VW*0.38));
+    updateHUD();
+  }
+
+  function loseLife(){
+    lives--; updateHUD();
+    if(lives<=0){ state="dead"; showOverlay("dead"); }
+    else { reset(false); }
+  }
+  function win(){ state="win"; showOverlay("win"); }
+
+  function showOverlay(kind){
+    const h=overlay.querySelector("h1"), sub=overlay.querySelector(".sub"),
+          btn=document.getElementById("startBtn"), keysEl=overlay.querySelector(".keys"),
+          hint=overlay.querySelector(".hint");
+    overlay.classList.remove("hidden");
+    keysEl.style.display="none";
+    if(kind==="win"){
+      h.textContent="🏆 通關啦！";
+      sub.innerHTML=`你收集了 <b>${coinCount}</b> 顆金幣，順利衝到終點旗！<br>換個人頭再玩一次，截圖傳給朋友 😆`;
+      btn.textContent="再玩一次"; hint.textContent="按上方「換人頭」可隨時替換主角的臉";
+    } else {
+      h.textContent="💀 失敗了";
+      sub.innerHTML=`金幣 <b>${coinCount}</b> 顆。別氣餒，再衝一次！`;
+      btn.textContent="重新挑戰"; hint.textContent="踩怪物頭頂才能打倒牠，小心坑洞";
+    }
+    drawTitleFace();
+  }
+
+  // =================== 繪圖 ===================
+  function draw(){
+    // 天空漸層
+    const g = ctx.createLinearGradient(0,0,0,VH);
+    g.addColorStop(0,"#ffd6a5"); g.addColorStop(.45,"#ff9e7d"); g.addColorStop(1,"#a06cd5");
+    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+
+    // 太陽
+    ctx.save();
+    ctx.globalAlpha=.85; ctx.fillStyle="#fff2c9";
+    ctx.beginPath(); ctx.arc(VW-120,110,56,0,7); ctx.fill();
+    ctx.globalAlpha=.18; ctx.beginPath(); ctx.arc(VW-120,110,86,0,7); ctx.fill();
+    ctx.restore();
+
+    // 遠山（視差）
+    drawHills(camX*0.3, GROUND_Y-30, "#b683d6", 1.0);
+    drawHills(camX*0.5, GROUND_Y-10, "#9d6bc4", 1.3);
+
+    // 雲
+    ctx.fillStyle="rgba(255,255,255,.85)";
+    for(let i=0;i<8;i++){
+      const cx=((i*640 - camX*0.4)%(LEVEL_W)) ; const cy=70+ (i%3)*46;
+      cloud(cx, cy);
+    }
+
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    drawGround();
+    platforms.forEach(drawPlatform);
+    coins.forEach(drawCoin);
+    drawGoal();
+    enemies.forEach(drawEnemy);
+    drawPlayer();
+
+    ctx.restore();
+  }
+
+  function drawHills(shift,baseY,color,sc){
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.moveTo(0,VH);
+    for(let x=-200;x<VW+200;x+=10){
+      const y=baseY - Math.abs(Math.sin((x+shift)*0.004))*90*sc;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(VW,VH); ctx.closePath(); ctx.fill();
+  }
+  function cloud(x,y){
+    ctx.beginPath();
+    ctx.arc(x,y,18,0,7); ctx.arc(x+20,y+4,22,0,7);
+    ctx.arc(x+44,y,16,0,7); ctx.arc(x+22,y-10,18,0,7);
+    ctx.fill();
+  }
+
+  function drawGround(){
+    const startX = Math.floor(camX/T)*T;
+    for(let x=startX; x<camX+VW+T; x+=T){
+      if(isGap(x+T/2)) continue;
+      // 草皮頂
+      ctx.fillStyle="#8fbf5f";
+      ctx.fillRect(x, GROUND_Y, T, 10);
+      ctx.fillStyle="#6fa343";
+      for(let i=0;i<T;i+=8){ ctx.fillRect(x+i, GROUND_Y, 4, 14); }
+      // 泥土
+      ctx.fillStyle="#7a4a2b"; ctx.fillRect(x, GROUND_Y+10, T, VH-GROUND_Y);
+      ctx.fillStyle="rgba(0,0,0,.12)";
+      ctx.fillRect(x, GROUND_Y+10, 2, VH-GROUND_Y);
+      ctx.fillStyle="#8a5736";
+      ctx.fillRect(x+8, GROUND_Y+24, 8, 8); ctx.fillRect(x+24, GROUND_Y+40, 8, 8);
+    }
+  }
+
+  function drawPlatform(p){
+    ctx.fillStyle="#c97b4a";
+    roundRect(p.x,p.y,p.w,20,6); ctx.fill();
+    ctx.fillStyle="#a85f33";
+    for(let i=0;i<p.w;i+=24){ ctx.fillRect(p.x+i+4,p.y+12,16,5); }
+    ctx.fillStyle="rgba(255,255,255,.25)";
+    ctx.fillRect(p.x,p.y,p.w,4);
+  }
+
+  function drawCoin(c){
+    if(c.got) return;
+    c.t+=0.12;
+    const wob = Math.sin(c.t)*0.5+0.5; // 0..1 旋轉
+    const w = 6 + wob*16;
+    ctx.save();
+    ctx.translate(c.x, c.y + Math.sin(c.t*0.6)*3);
+    ctx.fillStyle="#ffd93d";
+    ctx.beginPath(); ctx.ellipse(0,0,w/2,12,0,0,7); ctx.fill();
+    ctx.fillStyle="#ffaa00";
+    ctx.beginPath(); ctx.ellipse(0,0,Math.max(1,w/2-3),9,0,0,7); ctx.fill();
+    ctx.fillStyle="#fff6c2";
+    ctx.fillRect(-1,-7,2,14);
+    ctx.restore();
+  }
+
+  function drawEnemy(e){
+    ctx.save();
+    if(!e.alive){
+      // 被踩扁
+      ctx.translate(e.x,e.y);
+      ctx.fillStyle="#7a3b8f";
+      ctx.beginPath(); ctx.ellipse(0,e.dead?6:10,e.w/2,Math.max(3,e.dead/2),0,0,7); ctx.fill();
+      ctx.restore(); return;
+    }
+    e.wob+=0.15;
+    const bob=Math.sin(e.wob)*2;
+    ctx.translate(e.x, e.y-e.h/2+bob);
+    // 身體
+    ctx.fillStyle="#9b4fb5";
+    ctx.beginPath(); ctx.ellipse(0,0,e.w/2,e.h/2,0,0,7); ctx.fill();
+    ctx.fillStyle="#7a3b8f";
+    ctx.beginPath(); ctx.ellipse(0,e.h/3,e.w/2,e.h/4,0,0,7); ctx.fill();
+    // 腳
+    ctx.fillStyle="#3a1f47";
+    ctx.fillRect(-10,e.h/2-4,8,6); ctx.fillRect(2,e.h/2-4,8,6);
+    // 眼睛
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(-6,-4,5,0,7); ctx.arc(6,-4,5,0,7); ctx.fill();
+    ctx.fillStyle="#241734";
+    const ed = e.vx>0?1.5:-1.5;
+    ctx.beginPath(); ctx.arc(-6+ed,-4,2.4,0,7); ctx.arc(6+ed,-4,2.4,0,7); ctx.fill();
+    // 眉（生氣）
+    ctx.strokeStyle="#241734"; ctx.lineWidth=2; ctx.beginPath();
+    ctx.moveTo(-10,-9); ctx.lineTo(-2,-6); ctx.moveTo(10,-9); ctx.lineTo(2,-6); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGoal(){
+    const x=goal.x, top=GROUND_Y-260;
+    // 柱
+    ctx.fillStyle="#e8e8e8"; ctx.fillRect(x-3, top, 6, 260);
+    ctx.fillStyle="#bbb"; ctx.fillRect(x-3, top, 2, 260);
+    // 旗
+    const fl=Math.sin(t*0.12)*4;
+    ctx.fillStyle="#3ddc97";
+    ctx.beginPath();
+    ctx.moveTo(x+3,top+8);
+    ctx.lineTo(x+58+fl,top+24);
+    ctx.lineTo(x+3,top+44);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 18px Trebuchet MS";
+    ctx.fillText("✓", x+22, top+31);
+    // 底座
+    ctx.fillStyle="#2a9d6e"; roundRect(x-22,GROUND_Y-18,44,18,4); ctx.fill();
+  }
+
+  function drawPlayer(){
+    const p=player;
+    ctx.save();
+    ctx.translate(p.x+p.w/2, p.y);
+    const bob = p.onGround ? Math.sin(p.walk)*2 : 0;
+
+    // 影子
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    ctx.beginPath(); ctx.ellipse(0, p.h+4, 18, 5, 0,0,7); ctx.fill();
+
+    ctx.scale(p.face,1);
+
+    // 腿（走路擺動）
+    const legSwing = p.onGround ? Math.sin(p.walk)*6 : 4;
+    ctx.fillStyle="#3a2e52";
+    ctx.fillRect(-10, p.h-16+bob, 8, 16+legSwing*0); // 固定身高，用 x 擺
+    ctx.save();
+    ctx.fillStyle="#2e2442";
+    ctx.fillRect(-11+legSwing, p.h-14+bob, 9, 16);
+    ctx.fillRect(2-legSwing,  p.h-14+bob, 9, 16);
+    ctx.fillStyle="#ff5c8a"; // 鞋
+    ctx.fillRect(-13+legSwing, p.h+0+bob, 12, 6);
+    ctx.fillRect(1-legSwing,  p.h+0+bob, 12, 6);
+    ctx.restore();
+
+    // 身體（吊帶褲風格原創）
+    ctx.fillStyle="#3ddc97";
+    roundRect(-13, p.h-30+bob, 26, 24, 7); ctx.fill();
+    ctx.fillStyle="#2bbd80";
+    ctx.fillRect(-13, p.h-30+bob, 26, 6);
+    // 鈕扣
+    ctx.fillStyle="#ffd93d";
+    ctx.beginPath(); ctx.arc(-6,p.h-22+bob,2.2,0,7); ctx.arc(6,p.h-22+bob,2.2,0,7); ctx.fill();
+    // 手臂
+    ctx.fillStyle="#ffc59e";
+    ctx.fillRect(-17, p.h-28+bob, 6, 14);
+    ctx.fillRect(11,  p.h-28+bob, 6, 14);
+
+    // ===== 人頭（可替換）=====
+    const hx=0, hy=p.h-40+bob, R=18;
+    ctx.scale(p.face,1); // 還原成正向，避免上傳的臉左右顛倒
+    if(headImg){
+      ctx.save();
+      ctx.beginPath(); ctx.arc(hx,hy,R,0,7); ctx.clip();
+      const s=Math.min(headImg.width,headImg.height);
+      ctx.drawImage(headImg,(headImg.width-s)/2,(headImg.height-s)/2,s,s, hx-R,hy-R,R*2,R*2);
+      ctx.restore();
+      // 圓框
+      ctx.strokeStyle="#fff4e6"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(hx,hy,R,0,7); ctx.stroke();
+    } else {
+      drawDefaultFace(ctx, hx, hy, R);
+    }
+    ctx.restore();
+  }
+
+  // 預設可愛人頭（原創）
+  function drawDefaultFace(c, x, y, R){
+    c.fillStyle="#ffd93d";
+    c.beginPath(); c.arc(x,y,R,0,7); c.fill();
+    c.fillStyle="#e8b800"; // 頭髮
+    c.beginPath(); c.arc(x,y-2,R,Math.PI*1.05,Math.PI*1.95); c.fill();
+    // 眼
+    c.fillStyle="#241734";
+    c.beginPath(); c.arc(x-6,y-1,2.6,0,7); c.arc(x+6,y-1,2.6,0,7); c.fill();
+    // 腮紅
+    c.fillStyle="rgba(255,92,138,.5)";
+    c.beginPath(); c.arc(x-9,y+5,3,0,7); c.arc(x+9,y+5,3,0,7); c.fill();
+    // 笑嘴
+    c.strokeStyle="#241734"; c.lineWidth=2; c.beginPath();
+    c.arc(x,y+3,6,0.15*Math.PI,0.85*Math.PI); c.stroke();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+
+  // ---- 主迴圈 ----
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+  // 初始化
+  resize(); seedCoins(); seedEnemies(); drawTitleFace(); loop();
+})();
+</script>
+</body>
+</html>
