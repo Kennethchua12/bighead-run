@@ -80,9 +80,10 @@
 <div id="wrap"><canvas id="game"></canvas></div>
 
 <div id="hud">
-  <div class="stat">🪙 <b id="coins">0</b></div>
+  <div class="stat">關 <b id="lv">1/3</b></div>
+  <div class="stat">🎫 詞元 <b id="coins">0</b></div>
+  <div class="stat">⭐ <span id="score">0</span></div>
   <div class="stat">❤️ <span id="lives">3</span></div>
-  <div class="stat">🏁 <span id="dist">0</span>m</div>
   <div id="spacer"></div>
   <button class="btn" id="uploadBtn">📷<span class="lbl"> 換人頭</span></button>
   <button class="btn" id="faceBtn">😜<span class="lbl"> 換表情</span></button>
@@ -94,18 +95,19 @@
 
 <div id="overlay">
   <img id="titleFace" class="titleface" alt="">
-  <h1>大頭闖關</h1>
+  <h1>大頭闖關 · AI 養成</h1>
   <div class="sub">
-    踩怪、吃金幣、衝向終點旗 🚩<br>
-    最好玩的是 ——按「換人頭」上傳你朋友那張<b>爆笑偷笑臉</b>，主角立刻變成他！
+    收集<b>詞元 Token</b>、踩掉 Bug、避開<b>幻覺</b>，闖過<b>資料 → 訓練 → 上線</b>三關，養成你的 AI！<br>
+    （按「換人頭」可把主角換成你朋友的臉 😆）
   </div>
+  <div id="menuTip" class="sub" style="background:rgba(255,255,255,.08);border:1px dashed var(--coin);border-radius:12px;padding:10px 14px;max-width:500px;margin-top:4px"></div>
   <div class="keys">
     <span class="key">← →</span><span>移動</span>
     <span class="key">空白 / ↑</span><span>跳躍</span>
     <span class="key">手機</span><span>下方按鈕</span>
   </div>
-  <button class="btn big" id="startBtn">開始闖關</button>
-  <div class="hint">提示：踩在怪物頭上能打倒牠，正面撞到會扣血</div>
+  <button class="btn big" id="startBtn">開始養成 ▶</button>
+  <div class="hint">踩怪頭頂打倒牠、正面撞到扣血；尖刺與會飛的幻覺要閃開</div>
 </div>
 
 <div id="touch">
@@ -147,71 +149,127 @@
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", ()=>setTimeout(resize,120));
 
-  // ---- 關卡定義（原創設計）----
-  // 地面用磚塊段表示，浮空平台、金幣、怪物、終點旗
+  // ---- 關卡定義（AI 主題三關，難度遞增）----
   const T = 40; // 磚塊單位
   const GROUND_Y = VH - 80;
-  const LEVEL_W = 5200;
+  const GY = GROUND_Y;
 
-  // 地面缺口（坑洞）：[起點, 終點]
-  const gaps = [[1180,1320],[2460,2600],[3680,3820]];
+  // 執行期關卡狀態（由 loadLevel 填入）
+  let LEVEL_W=4300, gaps=[], platforms=[], movers=[], spikes=[], coins=[], enemies=[], goal={x:0,y:GY};
+  let levelIndex=0, levelName="", levelConcept="", levelStartFrame=0;
   function isGap(x){ return gaps.some(g => x > g[0] && x < g[1]); }
 
-  // 浮空平台 platforms：{x,y,w}
-  const platforms = [
-    {x:520,y:GROUND_Y-130,w:120},
-    {x:740,y:GROUND_Y-220,w:120},
-    {x:1120,y:GROUND_Y-150,w:180}, // 跨第一個坑
-    {x:1560,y:GROUND_Y-120,w:120},
-    {x:1780,y:GROUND_Y-210,w:120},
-    {x:2000,y:GROUND_Y-300,w:120},
-    {x:2400,y:GROUND_Y-150,w:200}, // 跨第二個坑
-    {x:2900,y:GROUND_Y-130,w:120},
-    {x:3120,y:GROUND_Y-230,w:120},
-    {x:3340,y:GROUND_Y-330,w:120},
-    {x:3620,y:GROUND_Y-160,w:200}, // 跨第三個坑
-    {x:4100,y:GROUND_Y-140,w:120},
-    {x:4320,y:GROUND_Y-240,w:120},
-    {x:4600,y:GROUND_Y-330,w:160},
+  // 三關：資料收集 → 模型訓練 → 推理上線
+  const LEVELS = [
+    { name:"第 1 關 · 資料收集", concept:"AI 靠『吃』大量資料學習。沿路收集詞元 Token，餵飽你的模型！",
+      len:4300, goalX:4120,
+      gaps:[[1150,1290],[2550,2700],[3550,3690]],
+      platforms:[{x:480,y:GY-120,w:120},{x:700,y:GY-200,w:110},{x:1070,y:GY-140,w:210},
+                 {x:1550,y:GY-120,w:120},{x:1820,y:GY-210,w:120},{x:2470,y:GY-150,w:250},
+                 {x:2950,y:GY-130,w:120},{x:3180,y:GY-220,w:120},{x:3500,y:GY-150,w:240},{x:3950,y:GY-130,w:120}],
+      movers:[], spikes:[],
+      enemies:[{x:600,min:540,max:860,vx:1.3},{x:1650,min:1520,max:1900,vx:1.5},
+               {x:2980,min:2900,max:3170,vx:1.4},{x:3980,min:3900,max:4090,vx:1.6}] },
+
+    { name:"第 2 關 · 模型訓練", concept:"訓練＝不停調整幾千億個『參數』。平台會動，抓準節奏跳上去！",
+      len:5000, goalX:4820,
+      gaps:[[880,1090],[1880,2120],[2880,3120],[3880,4090]],
+      platforms:[{x:560,y:GY-150,w:110},{x:1500,y:GY-160,w:120},{x:2500,y:GY-180,w:120},{x:3500,y:GY-160,w:120}],
+      movers:[{x0:880,y0:GY-120,w:120,axis:"x",amp:95,speed:0.030,phase:0},
+              {x0:1980,y0:GY-130,w:115,axis:"y",amp:75,speed:0.036,phase:1},
+              {x0:2980,y0:GY-120,w:120,axis:"x",amp:95,speed:0.032,phase:0},
+              {x0:3980,y0:GY-130,w:115,axis:"y",amp:75,speed:0.038,phase:2}],
+      spikes:[{x:1300,w:80},{x:3300,w:80}],
+      enemies:[{x:680,min:600,max:840,vx:1.7},{x:1560,min:1460,max:1740,vx:1.8},
+               {x:2560,min:2440,max:2760,vx:1.7},{x:3560,min:3460,max:3760,vx:1.9},
+               {x:4400,min:4300,max:4620,vx:1.8}] },
+
+    { name:"第 3 關 · 推理上線", concept:"模型上線啦！要面對使用者，還有亂講話的『幻覺』。小心會飛的幻覺怪！",
+      len:5500, goalX:5300,
+      gaps:[[800,1010],[1700,1930],[2600,2830],[3500,3730],[4300,4490]],
+      platforms:[{x:520,y:GY-160,w:100},{x:1300,y:GY-150,w:110},{x:2200,y:GY-170,w:110},
+                 {x:3100,y:GY-160,w:110},{x:4000,y:GY-170,w:110}],
+      movers:[{x0:800,y0:GY-110,w:100,axis:"x",amp:90,speed:0.036,phase:0},
+              {x0:1790,y0:GY-120,w:100,axis:"y",amp:85,speed:0.042,phase:0},
+              {x0:2690,y0:GY-110,w:100,axis:"x",amp:100,speed:0.040,phase:1},
+              {x0:3590,y0:GY-120,w:100,axis:"y",amp:95,speed:0.046,phase:0},
+              {x0:4370,y0:GY-110,w:100,axis:"x",amp:90,speed:0.042,phase:2}],
+      spikes:[{x:1150,w:90},{x:2050,w:90},{x:3000,w:90},{x:4080,w:80}],
+      enemies:[{x:1300,min:1200,max:1500,vx:1.9,type:"walk"},{x:2200,min:2100,max:2400,vx:2.0,type:"walk"},
+               {x:1600,min:1480,max:1860,vx:1.7,type:"fly",y:GY-150},
+               {x:3300,min:3180,max:3600,vx:2.1,type:"walk"},
+               {x:3680,min:3560,max:3920,vx:1.8,type:"fly",y:GY-160},
+               {x:4650,min:4520,max:4880,vx:2.0,type:"walk"}] }
   ];
 
-  // 金幣
-  let coins = [];
-  function seedCoins(){
-    coins = [];
+  function loadLevel(i){
+    levelIndex=i;
+    const L=LEVELS[i];
+    LEVEL_W=L.len; gaps=L.gaps; platforms=L.platforms; spikes=L.spikes||[];
+    movers=(L.movers||[]).map(m=>({...m,x:m.x0,y:m.y0,px:m.x0,py:m.y0,dx:0,dy:0}));
+    goal={x:L.goalX,y:GY};
+    levelName=L.name; levelConcept=L.concept; levelStartFrame=t;
+    seedCoinsForLevel(L); seedEnemiesForLevel(L);
+    coinCount=0;
+  }
+  function seedCoinsForLevel(L){
+    coins=[];
     const add=(x,y)=>coins.push({x,y,got:false,t:Math.random()*6});
-    // 平台上方的金幣串
-    platforms.forEach(p=>{ for(let i=0;i<3;i++) add(p.x+30+i*40, p.y-46); });
-    // 地面途中的金幣串
-    for(let x=300;x<LEVEL_W-300;x+=260){
-      if(isGap(x)) continue;
-      add(x, GROUND_Y-50); add(x+40, GROUND_Y-90); add(x+80, GROUND_Y-50);
+    L.platforms.forEach(p=>{ for(let i=0;i<3;i++) add(p.x+24+i*38, p.y-44); });
+    (L.movers||[]).forEach(m=>{ add(m.x0,m.y0-44); add(m.x0+38,m.y0-44); });
+    for(let x=280;x<L.len-260;x+=240){
+      if(gaps.some(g=>x>g[0]-20&&x<g[1]+20)) continue;
+      if((L.spikes||[]).some(s=>x>s.x-34&&x<s.x+s.w+34)) continue;
+      add(x,GY-46); add(x+38,GY-86);
     }
   }
-
-  // 怪物 enemies：地面巡邏的小團子
-  let enemies = [];
-  function seedEnemies(){
-    enemies = [
-      {x:640,min:560,max:840,vx:1.1},
-      {x:1640,min:1500,max:1900,vx:1.3},
-      {x:2200,min:2120,max:2360,vx:1.0},
-      {x:2950,min:2880,max:3120,vx:1.4},
-      {x:4200,min:4060,max:4380,vx:1.2},
-    ].map(e=>({...e,y:GROUND_Y-34,w:36,h:34,alive:true,dead:0,wob:Math.random()*6}));
+  function seedEnemiesForLevel(L){
+    enemies=(L.enemies||[]).map(e=>({
+      x:e.x,min:e.min,max:e.max,vx:e.vx,type:e.type||"walk",
+      y: e.type==="fly" ? e.y : GY-34,
+      w: e.type==="fly"?34:36, h:34,
+      alive:true,dead:0,wob:Math.random()*6
+    }));
   }
 
-  const goal = {x:5000, y:GROUND_Y};
+  // ---- AI 知識小貼士（原創、12 歲看得懂、勾起好奇心）----
+  const TIPS = [
+    "AI 看不懂『字』，牠把每個字拆成『詞元 Token』再換成一串數字——你打的字，對牠來說其實是一堆數字！",
+    "ChatGPT、Claude、Gemini、DeepSeek 其實都在做同一件事：猜下一個字。牠們是世界最強的『文字接龍高手』。",
+    "為什麼 AI 有時一本正經地亂講？這叫『幻覺 Hallucination』——牠太想回答，就編了個聽起來很合理的答案。重要的事要查證！",
+    "AI 的『大腦』裡有幾千億個『參數』，像幾千億顆小旋鈕；訓練就是慢慢把每顆轉到對的位置。",
+    "Transformer 有個招式叫『注意力 Attention』，讓 AI 讀句子時知道哪些字最關鍵——跟你打王者要盯關鍵團戰一樣。",
+    "想讓 AI 答得好？給清楚的指令＋例子＋叫牠『一步一步想』，效果差超多。這門功夫叫『提示工程 Prompt Engineering』。",
+    "Claude 是 Anthropic 做的、ChatGPT 是 OpenAI、Gemini 是 Google、DeepSeek 來自中國——牠們是不同公司的『選手』。",
+    "AI 也有『記憶上限』叫『上下文視窗 Context Window』，聊太長牠會忘了前面——像背包格子有限。",
+    "DeepSeek 走『開源』路線，誰都能下載研究；有些模型是『閉源』，只能透過 API 使用。各有玩法。",
+    "AI 其實不會算數，牠是用『猜』的，所以複雜計算最好叫牠寫程式或用計算工具。",
+    "AlphaGo 用 AI 打敗了世界圍棋冠軍——這跟你鑽研英雄出裝、找最優解，是同一種『學習』。",
+    "訓練一個大模型要用上萬張 GPU 算好幾週，電費貴到嚇人——所以才叫『大』模型。",
+    "AI 有『知識截止日』，那天之後發生的事牠原本不知道，要靠『上網搜尋』才補得到。",
+    "同個問題問兩次，答案可能不一樣，因為回答帶一點『隨機性 Temperature』，像擲骰子挑下一個詞。",
+    "『多模態 Multimodal』AI 不只看文字，還能看圖、聽聲音、甚至看影片——眼睛耳朵都長齊了。",
+    "AI 會很有自信地說錯話。聰明用法：把牠當超強助手，但關鍵答案自己再確認一次。",
+    "『微調 Fine-tuning』＝拿一個已經很聰明的模型，再針對某專長補課，把牠練成專家。",
+    "你問 AI 問題叫『推理 Inference』，牠學習的過程叫『訓練 Training』——一個像考試，一個像讀書。",
+    "AI 的能力很多是『練出來、不是寫出來』的——沒人手動教牠每個答案，是牠自己從資料裡學會的。",
+    "把問題講清楚、給背景、說你要什麼格式，AI 的回答品質會大躍進。會問問題，比會用工具更重要。"
+  ];
+  let tipIdx = Math.floor(Math.random()*TIPS.length);
+  function nextTip(){ tipIdx = (tipIdx + 1 + Math.floor(Math.random()*(TIPS.length-1))) % TIPS.length; return TIPS[tipIdx]; }
+  function curTip(){ return TIPS[tipIdx]; }
 
   // ---- 玩家 ----
   const player = {
     x:80, y:GROUND_Y-60, w:34, h:54, vx:0, vy:0,
-    onGround:false, face:1, alive:true, win:false, blink:0, walk:0
+    onGround:false, face:1, alive:true, win:false, blink:0, walk:0, rideMover:null
   };
 
   // ---- 狀態 ----
-  let state = "menu"; // menu | play | dead | win
+  let state = "menu"; // menu | play | dying | winning | levelclear | win | dead
   let coinCount = 0, lives = 3, camX = 0, t = 0;
+  let totalScore = 0, bestScore = 0;
+  try{ bestScore = parseInt(localStorage.getItem("bighead_best")||"0")||0; }catch(e){}
   const keys = {left:false, right:false, jump:false, jumpHeld:false};
   let faceIndex = 0;          // 內建表情索引（headImg 存在時優先用上傳圖）
   let particles = [];         // 粒子特效
@@ -389,16 +447,19 @@
   const JUMP_BUFFER=8, COYOTE=7;   // 跳躍輸入緩衝 / 離地後仍可跳的幀數
   let jumpBuffer=0, coyote=0;
 
-  function reset(full){
+  // 重生玩家（保留關卡狀態）
+  function respawnPlayer(){
     player.x=80; player.y=GROUND_Y-60; player.vx=0; player.vy=0;
-    player.alive=true; player.win=false; player.face=1;
+    player.alive=true; player.win=false; player.face=1; player.rideMover=null;
     camX=0; flyHead=null; fx=null;
-    if(full){ coinCount=0; lives=3; seedCoins(); seedEnemies(); }
     state="play"; overlay.classList.add("hidden");
-    updateHUD();
-    startMusic();
+    updateHUD(); startMusic();
   }
-  document.getElementById("resetBtn").onclick = ()=>{ reset(true); };
+  // 進入第 i 關（重置生命、載入關卡資料）
+  function enterLevel(i){ loadLevel(i); lives=3; respawnPlayer(); }
+  // 開新局（總分歸零，從第 1 關）
+  function startGame(){ totalScore=0; enterLevel(0); }
+  document.getElementById("resetBtn").onclick = ()=>{ enterLevel(levelIndex); }; // 重來本關
 
   // ---- 輸入 ----
   const keyMap = {ArrowLeft:"left",KeyA:"left",ArrowRight:"right",KeyD:"right",
@@ -422,13 +483,19 @@
     b.addEventListener("mousedown",on); b.addEventListener("mouseup",off);
     b.addEventListener("mouseleave",off);
   });
-  document.getElementById("startBtn").onclick = ()=>{ audioCtx(); reset(true); };
+  document.getElementById("startBtn").onclick = ()=>{
+    audioCtx();
+    if(state==="levelclear") enterLevel(levelIndex+1);   // 下一關
+    else if(state==="dead") enterLevel(levelIndex);       // 重來本關
+    else startGame();                                     // 主畫面 / 全破後重玩
+  };
 
   // ---- HUD ----
   function updateHUD(){
+    const lv=document.getElementById("lv"); if(lv) lv.textContent=(levelIndex+1)+"/"+LEVELS.length;
     document.getElementById("coins").textContent = coinCount;
+    const sc=document.getElementById("score"); if(sc) sc.textContent = totalScore + coinCount*10;
     document.getElementById("lives").textContent = "❤️".repeat(Math.max(0,lives)) || "—";
-    document.getElementById("dist").textContent = Math.max(0,Math.round(player.x/40));
   }
 
   // ---- 碰撞輔助：玩家踩地面或平台 ----
@@ -473,8 +540,16 @@
     p.vy += GRAV; if(p.vy>16) p.vy=16;
     p.y += p.vy;
 
+    // 移動平台更新（先算出本幀位移 dx/dy，供載人用）
+    for(const m of movers){
+      m.px=m.x; m.py=m.y;
+      const off=Math.sin(t*m.speed+m.phase)*m.amp;
+      if(m.axis==="x"){ m.x=m.x0+off; m.y=m.y0; } else { m.x=m.x0; m.y=m.y0+off; }
+      m.dx=m.x-m.px; m.dy=m.y-m.py;
+    }
+
     // 與地面 / 平台碰撞（只在下落時著地）
-    p.onGround=false;
+    p.onGround=false; p.rideMover=null;
     const footY = p.y + p.h;
     // 地面
     const gTop = groundTop(p.x, p.w);
@@ -489,12 +564,28 @@
         }
       }
     }
+    // 移動平台（站上去會被帶著走，含上升時用 |dy| 放寬著地容差）
+    for(const m of movers){
+      if(p.x+p.w>m.x+4 && p.x<m.x+m.w-4){
+        const f=p.y+p.h;
+        if(p.vy>=0 && f>=m.y && f-p.vy<=m.y+Math.abs(m.dy)+4){
+          p.y=m.y-p.h; p.vy=0; p.onGround=true; p.rideMover=m;
+        }
+      }
+    }
 
     // 跳躍：土狼時間 + 輸入緩衝（差一兩幀按也算數，跳躍更靈敏可靠）
     if(p.onGround) coyote = COYOTE; else if(coyote>0) coyote--;
     if(jumpBuffer>0) jumpBuffer--;
     if(jumpBuffer>0 && coyote>0){
-      p.vy = JUMP; p.onGround=false; coyote=0; jumpBuffer=0; sfx.jump();
+      p.vy = JUMP; p.onGround=false; coyote=0; jumpBuffer=0; p.rideMover=null; sfx.jump();
+    }
+    // 站在移動平台上 → 水平被帶著走
+    if(p.rideMover && p.onGround){ p.x += p.rideMover.dx; }
+
+    // 尖刺陷阱 → 死亡
+    for(const s of spikes){
+      if(p.x+p.w>s.x+4 && p.x<s.x+s.w-4 && p.y+p.h>GY-12){ loseLife(); return; }
     }
 
     // 掉進坑洞 / 出界 → 死亡
@@ -557,10 +648,9 @@
     }
     if(fx.t===60){ sfx.sticker(); fx.sticker=1; }  // 甩出「再接再厲」貼紙
     if(fx.t>=110){
-      lives--; updateHUD();
-      flyHead=null; fx=null;
+      lives--; flyHead=null; fx=null;
       if(lives<=0){ state="dead"; showOverlay("dead"); }
-      else { reset(false); }  // reset 會重新開始音樂
+      else { loadLevel(levelIndex); respawnPlayer(); }  // 重來本關（新的一條命）
     }
   }
 
@@ -595,26 +685,52 @@
                         color:colors[i%colors.length],size:2+Math.random()*3}); }
     }
     if(fx.t===20){ sfx.stamp(); fx.stamp=1; } // 印章砸下
-    if(fx.t>=120){ fx=null; state="win"; showOverlay("win"); }
+    if(fx.t>=120){
+      fx=null;
+      // 結算本關分數：詞元×10 + 時間獎勵 + 過關獎勵 500
+      const timeSec=(t-levelStartFrame)/60;
+      const timeBonus=Math.max(0, Math.round(90 - timeSec)*5);
+      totalScore += coinCount*10 + timeBonus + 500;
+      if(totalScore>bestScore){ bestScore=totalScore; try{localStorage.setItem("bighead_best",String(bestScore));}catch(e){} }
+      if(levelIndex < LEVELS.length-1){ state="levelclear"; showOverlay("levelclear"); }
+      else { state="win"; showOverlay("win"); }
+    }
   }
 
   function showOverlay(kind){
+    nextTip(); // 每次過關/失敗換一條新知識
+    const mt=document.getElementById("menuTip"); if(mt) mt.style.display="none";
     const h=overlay.querySelector("h1"), sub=overlay.querySelector(".sub"),
           btn=document.getElementById("startBtn"), keysEl=overlay.querySelector(".keys"),
           hint=overlay.querySelector(".hint");
     overlay.classList.remove("hidden");
     keysEl.style.display="none";
-    if(kind==="win"){
-      h.textContent="🏆 通關啦！";
-      sub.innerHTML=`<div style="font-size:1.05em;margin-bottom:10px">恭喜過關！金幣 <b>${coinCount}</b> 顆</div>`+
-        `<div style="background:rgba(255,255,255,.1);border:2px dashed var(--coin);border-radius:14px;`+
-        `padding:14px 18px;display:inline-block;margin:4px 0">🎖️ 神秘獎勵<br><b style="font-size:1.25em">${lastReward}</b></div>`+
-        `<div style="margin-top:10px;opacity:.85">換個人頭再玩一次，截圖傳給朋友 😆</div>`;
-      btn.textContent="再玩一次"; hint.textContent="每次過關獎勵都不一樣，試試手氣！";
+    const card=(title,body)=>`<div style="background:rgba(255,255,255,.1);border:2px dashed var(--coin);`+
+        `border-radius:14px;padding:13px 16px;margin:8px auto;max-width:480px;text-align:left;line-height:1.55">`+
+        `<div style="color:var(--coin);font-weight:bold;margin-bottom:5px">${title}</div>${body}</div>`;
+
+    if(kind==="levelclear"){
+      h.textContent="✅ 過關！";
+      sub.innerHTML=
+        `<div style="margin-bottom:6px">分數 <b>${totalScore}</b>　本關詞元 <b>${coinCount}</b></div>`+
+        card("💡 AI 知識卡", curTip())+
+        card("🎖️ 神秘獎勵", `<b style="font-size:1.1em">${lastReward}</b>`);
+      btn.textContent="進入下一關 ▶"; hint.textContent=`下一關：${LEVELS[levelIndex+1].name.split("·")[1]||""}`;
+    } else if(kind==="win"){
+      h.textContent="🏆 全部破關！";
+      const isBest = totalScore>=bestScore;
+      sub.innerHTML=
+        `<div style="margin-bottom:6px">最終分數 <b style="font-size:1.2em">${totalScore}</b>${isBest?' 🥇 新紀錄!':''}<br>`+
+        `<span style="opacity:.8">歷史最佳：${bestScore}</span></div>`+
+        card("🧠 你完成了一個 AI 的養成", "資料收集 → 模型訓練 → 推理上線，你剛剛把整條 AI 的路走了一遍！")+
+        card("💡 最後一條知識卡", curTip());
+      btn.textContent="再玩一次"; hint.textContent="想刷更高分？通關越快、撿越多詞元，分數越高";
     } else {
-      h.textContent="💀 失敗了";
-      sub.innerHTML=`金幣 <b>${coinCount}</b> 顆。別氣餒，再衝一次！`;
-      btn.textContent="重新挑戰"; hint.textContent="踩怪物頭頂才能打倒牠，小心坑洞";
+      h.textContent="💀 模型崩潰了";
+      sub.innerHTML=
+        `<div style="margin-bottom:6px">本關詞元 <b>${coinCount}</b>　目前分數 <b>${totalScore}</b></div>`+
+        card("💡 別氣餒，順便學一招", curTip());
+      btn.textContent="重來本關"; hint.textContent="踩怪頭頂才打得倒、避開尖刺與會飛的幻覺";
     }
     drawTitleFace();
   }
@@ -651,7 +767,9 @@
     ctx.translate(-camX,0);
 
     drawGround();
+    drawSpikes();
     platforms.forEach(drawPlatform);
+    movers.forEach(drawMover);
     coins.forEach(drawCoin);
     drawGoal();
     enemies.forEach(drawEnemy);
@@ -661,9 +779,58 @@
 
     ctx.restore();
 
-    // 螢幕空間特效（不隨鏡頭移動）：印章 / 貼紙
+    // 螢幕空間特效（不隨鏡頭移動）：印章 / 貼紙 / 關卡概念橫幅
     if(state==="winning") drawWinStamp();
     if(state==="dying")   drawDeathSticker();
+    if(state==="play")    drawConceptBanner();
+  }
+
+  // 關卡開場概念橫幅（前幾秒淡出）
+  function drawConceptBanner(){
+    const age = t - levelStartFrame;
+    if(age > 260) return;
+    const a = age < 200 ? 1 : (260-age)/60;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle="rgba(20,16,40,.72)";
+    roundRect(VW*0.5-Math.min(VW*0.46,300), 70, Math.min(VW*0.92,600), 70, 14); ctx.fill();
+    ctx.fillStyle="#ffd93d"; ctx.font="bold 22px 'Trebuchet MS',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(levelName, VW*0.5, 92);
+    ctx.fillStyle="#fff4e6"; ctx.font="13px 'Trebuchet MS',sans-serif";
+    wrapText(levelConcept, VW*0.5, 115, Math.min(VW*0.86,560), 16);
+    ctx.restore();
+    ctx.textAlign="start"; ctx.textBaseline="alphabetic";
+  }
+  function wrapText(txt,cx,y,maxW,lh){
+    const chars=[...txt]; let line="", yy=y;
+    for(const ch of chars){
+      if(ctx.measureText(line+ch).width>maxW){ ctx.fillText(line,cx,yy); line=ch; yy+=lh; }
+      else line+=ch;
+    }
+    if(line) ctx.fillText(line,cx,yy);
+  }
+
+  // 尖刺陷阱
+  function drawSpikes(){
+    for(const s of spikes){
+      ctx.fillStyle="#cfd6e6";
+      for(let x=s.x; x<s.x+s.w-6; x+=14){
+        ctx.beginPath(); ctx.moveTo(x,GY); ctx.lineTo(x+7,GY-18); ctx.lineTo(x+14,GY); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle="#9aa3b8"; ctx.fillRect(s.x,GY,s.w,4);
+    }
+  }
+  // 移動平台
+  function drawMover(m){
+    ctx.fillStyle="#7c5cff";
+    roundRect(m.x,m.y,m.w,18,6); ctx.fill();
+    ctx.fillStyle="#5a3fd6"; for(let i=0;i<m.w;i+=22){ ctx.fillRect(m.x+i+4,m.y+11,14,4); }
+    ctx.fillStyle="rgba(255,255,255,.3)"; ctx.fillRect(m.x,m.y,m.w,3);
+    // 方向箭頭提示
+    ctx.fillStyle="rgba(255,255,255,.5)"; ctx.font="11px sans-serif"; ctx.textAlign="center";
+    ctx.fillText(m.axis==="x"?"↔":"↕", m.x+m.w/2, m.y+15);
+    ctx.textAlign="start";
   }
 
   // 死亡：身體垮掉（無頭）
@@ -812,6 +979,26 @@
       ctx.translate(e.x,e.y);
       ctx.fillStyle="#7a3b8f";
       ctx.beginPath(); ctx.ellipse(0,e.dead?6:10,e.w/2,Math.max(3,e.dead/2),0,0,7); ctx.fill();
+      ctx.restore(); return;
+    }
+    // 飛行幻覺怪：漂浮幽靈
+    if(e.type==="fly"){
+      e.wob+=0.12;
+      const bob=Math.sin(e.wob)*5;
+      ctx.translate(e.x, e.y+bob);
+      ctx.globalAlpha=.92; ctx.fillStyle="#7ad0ff";
+      ctx.beginPath();
+      ctx.arc(0,-2,15,Math.PI,0); // 半圓頂
+      ctx.lineTo(15,12);
+      for(let i=1;i<=4;i++){ ctx.lineTo(15-i*7.5, 12-(i%2?6:0)); } // 波浪底
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=1; ctx.fillStyle="#fff";
+      ctx.beginPath(); ctx.arc(-5,-2,4,0,7); ctx.arc(6,-2,4,0,7); ctx.fill();
+      ctx.fillStyle="#1b3a4a";
+      const ed=e.vx>0?1.2:-1.2;
+      ctx.beginPath(); ctx.arc(-5+ed,-2,2,0,7); ctx.arc(6+ed,-2,2,0,7); ctx.fill();
+      ctx.fillStyle="#1b3a4a"; ctx.font="9px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("?",0,9); ctx.textAlign="start";
       ctx.restore(); return;
     }
     e.wob+=0.15;
@@ -979,7 +1166,8 @@
   }
 
   // 初始化
-  resize(); seedCoins(); seedEnemies(); drawTitleFace(); loop();
+  const mt=document.getElementById("menuTip"); if(mt) mt.innerHTML="💡 <b>AI 小知識：</b>"+curTip();
+  resize(); loadLevel(0); drawTitleFace(); loop();
 })();
 </script>
 </body>
