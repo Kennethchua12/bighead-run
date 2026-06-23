@@ -620,11 +620,14 @@
   }
 
   // =================== 繪圖 ===================
+  let skyGrad = null;
   function draw(){
-    // 天空漸層
-    const g = ctx.createLinearGradient(0,0,0,VH);
-    g.addColorStop(0,"#ffd6a5"); g.addColorStop(.45,"#ff9e7d"); g.addColorStop(1,"#a06cd5");
-    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+    // 天空漸層（快取一次，避免每幀重建）
+    if(!skyGrad){
+      skyGrad = ctx.createLinearGradient(0,0,0,VH);
+      skyGrad.addColorStop(0,"#ffd6a5"); skyGrad.addColorStop(.45,"#ff9e7d"); skyGrad.addColorStop(1,"#a06cd5");
+    }
+    ctx.fillStyle=skyGrad; ctx.fillRect(0,0,VW,VH);
 
     // 太陽
     ctx.save();
@@ -967,26 +970,16 @@
   }
 
   // ---- 主迴圈 ----
-  // ---- 主迴圈（固定步長，幀率無關）----
-  // 不論螢幕 60Hz / 90Hz / 120Hz，物理都以固定 60 步/秒模擬，手感一致；畫面照螢幕更新率繪製。
-  let lastTime = 0, accumulator = 0;
-  const STEP = 1000/60;
-  function loop(now){
-    if(!lastTime) lastTime = now;
-    let dt = now - lastTime; lastTime = now;
-    if(dt > 100) dt = 100;                 // 分頁切回時避免一次補太多
-    accumulator += dt;
-    let steps = 0;
-    while(accumulator >= STEP && steps < 5){
-      update(); updateParticles();
-      accumulator -= STEP; steps++;
-    }
+  // 每一幀跑一次更新與繪製，最單純也最順（避免固定步長累積造成的頓挫）。
+  function loop(){
+    update();
+    updateParticles();
     draw();
     requestAnimationFrame(loop);
   }
 
   // 初始化
-  resize(); seedCoins(); seedEnemies(); drawTitleFace(); requestAnimationFrame(loop);
+  resize(); seedCoins(); seedEnemies(); drawTitleFace(); loop();
 })();
 </script>
 </body>
